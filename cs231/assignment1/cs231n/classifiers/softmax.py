@@ -1,0 +1,123 @@
+import numpy as np
+from random import shuffle
+
+def softmax_loss_naive(W, X, y, reg):
+  """
+  Softmax loss function, naive implementation (with loops)
+
+  Inputs have dimension D, there are C classes, and we operate on minibatches
+  of N examples.
+
+  Inputs:
+  - W: A numpy array of shape (D, C) containing weights.
+  - X: A numpy array of shape (N, D) containing a minibatch of data.
+  - y: A numpy array of shape (N,) containing training labels; y[i] = c means
+    that X[i] has label c, where 0 <= c < C.
+  - reg: (float) regularization strength
+
+  Returns a tuple of:
+  - loss as single float
+  - gradient with respect to weights W; an array of same shape as W
+  """
+  # Initialize the loss and gradient to zero.
+  loss = 0.0
+  dW = np.zeros_like(W)
+
+  #############################################################################
+  # TODO: Compute the softmax loss and its gradient using explicit loops.     #
+  # Store the loss in loss and the gradient in dW. If you are not careful     #
+  # here, it is easy to run into numeric instability. Don't forget the        #
+  # regularization!                                                           #
+  #############################################################################
+  num_train = X.shape[0]
+  num_classes = W.shape[1]
+  for i in range(num_train):
+    f = X[i].dot(W)
+    # f -= np.max(f)
+    sum_f_exp = np.sum(np.exp(f))
+
+    for j in range(num_classes):
+      if j == y[i]:
+        dW[:, j] += (np.exp(f[j])/sum_f_exp - 1) * X[i]
+      else:
+        dW[:, j] += X[i] * np.exp(f[j])/sum_f_exp
+
+    loss += - f[y[i]] + np.log(sum_f_exp)
+
+  loss = loss/num_train + 0.5 * reg * np.sum(W * W)
+  dW = dW/num_train + 0.5 * reg * np.sum(W * W)
+
+  #############################################################################
+  #                          END OF YOUR CODE                                 #
+  #############################################################################
+
+  return loss, dW
+
+
+def softmax_loss_vectorized(W, X, y, reg):
+  """
+  Softmax loss function, vectorized version.
+
+  Inputs and outputs are the same as softmax_loss_naive.
+  """
+  # Initialize the loss and gradient to zero.
+  # loss = 0.0
+  # dW = np.zeros_like(W)
+  score = X.dot(W)
+  score -= np.max(score)
+  score_exp = np.exp(score)
+  num_train = X.shape[0]
+  loss = np.log(score_exp.sum(1)).sum() - score[range(num_train), y].sum()
+  loss = loss/num_train + 0.5 * reg * np.sum(W * W)
+  D = (score_exp.transpose()/score_exp.sum(1)).transpose()
+  D[range(num_train), y] -= 1
+  dW = X.transpose().dot(D)/num_train + reg * W
+
+  #############################################################################
+  # TODO: Compute the softmax loss and its gradient using no explicit loops.  #
+  # Store the loss in loss and the gradient in dW. If you are not careful     #
+  # here, it is easy to run into numeric instability. Don't forget the        #
+  # regularization!                                                           #
+  #############################################################################
+  pass
+  #############################################################################
+  #                          END OF YOUR CODE                                 #
+  #############################################################################
+
+  return loss, dW
+
+
+def softmax_loss_grad(W, X, y, reg):
+  """
+  Softmax loss function, vectorized version.
+
+  Inputs and outputs are the same as softmax_loss_naive.
+  """
+  # Initialize the loss and gradient to zero.
+  # loss = 0.0
+  # dW = np.zeros_like(W)
+  score = X.dot(W)
+  score -= np.max(score)
+  score_exp = np.exp(score)
+  num_train = X.shape[0]
+  loss = np.log(score_exp.sum(1)).sum() - score[range(num_train), y].sum()
+  loss = loss/num_train + 0.5 * reg * np.sum(W * W)
+  D = (score_exp.transpose()/score_exp.sum(1)).transpose()
+  D[range(num_train), y] -= 1
+  dW = X.transpose().dot(D)/num_train + reg * W
+  # print("shape of D:", D.shape, " shape of W:", W.shape, " shape of X:", X.shape)
+  dX = D.dot(W.transpose())
+
+  #############################################################################
+  # TODO: Compute the softmax loss and its gradient using no explicit loops.  #
+  # Store the loss in loss and the gradient in dW. If you are not careful     #
+  # here, it is easy to run into numeric instability. Don't forget the        #
+  # regularization!                                                           #
+  #############################################################################
+  pass
+  #############################################################################
+  #                          END OF YOUR CODE                                 #
+  #############################################################################
+
+  return loss, dW, dX
+
