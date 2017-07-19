@@ -26,10 +26,10 @@ class WuziqiGame(game.interfaces.IEnvironment):
     def get_available_points(self):
         return np.where(self.state == 0)
 
-    def eval_point_states(self, points):
+    def eval_row(self, row):
         last_val = 0
         repeat_count = 0
-        for p in points:
+        for p in row:
             if p == last_val:
                 repeat_count += 1
                 if (p in self.terminal_point_states) and repeat_count >= self.winning_size:
@@ -39,36 +39,35 @@ class WuziqiGame(game.interfaces.IEnvironment):
                 repeat_count = 0
         return 0
 
-    def get_triangle_row(self, start_x, start_y, end_x, end_y, x_step, y_step):
+    def get_diagonal_row(self, start_x, start_y, end_x, end_y, x_step, y_step):
         # print("start_x, end_x, x_step, start_y, end_y, y_step:", start_x, end_x, x_step, start_y, end_y, y_step)
         row = self.state[range(start_x, end_x, x_step), range(start_y, end_y, y_step)]
-
         # print(row)
         return row
 
-    def get_triangle_rows(self):
+    def get_diagonal_rows(self):
         rows = []
         for x in range(self.winning_size - 1, self.board_size[0]):
-            rows.append(self.get_triangle_row(x, 0, -1, x + 1, -1, 1))
+            rows.append(self.get_diagonal_row(x, 0, -1, x + 1, -1, 1))
         for y in range(1, self.board_size[1] - self.winning_size + 1):
-            rows.append(self.get_triangle_row(self.board_size[0] - 1, y, y - 1, self.board_size[1], -1, 1))
+            rows.append(self.get_diagonal_row(self.board_size[0] - 1, y, y - 1, self.board_size[1], -1, 1))
         for x in range(self.board_size[0] - self.winning_size, 0, -1):
-            rows.append(self.get_triangle_row(x, 0, self.board_size[0], self.board_size[1] - x, 1, 1))
+            rows.append(self.get_diagonal_row(x, 0, self.board_size[0], self.board_size[1] - x, 1, 1))
         for y in range(self.board_size[1] - self.winning_size + 1):
-            rows.append(self.get_triangle_row(0, y, self.board_size[0] - y, self.board_size[1], 1, 1))
+            rows.append(self.get_diagonal_row(0, y, self.board_size[0] - y, self.board_size[1], 1, 1))
         return rows
 
     def eval_state(self):
         for x in range(self.board_size[0]):
-            val1 = self.eval_point_states(self.state[x, :])
+            val1 = self.eval_row(self.state[x, :])
             if val1 in self.terminal_point_states:
                 return val1
         for y in range(self.board_size[1]):
-            val2 = self.eval_point_states(self.state[:, y])
+            val2 = self.eval_row(self.state[:, y])
             if val2 in self.terminal_point_states:
                 return val2
-        for triangle_row in self.get_triangle_rows():
-            val3 = self.eval_point_states(triangle_row)
+        for row in self.get_diagonal_rows():
+            val3 = self.eval_row(row)
             if val3 in self.terminal_point_states:
                 return val3
         return 0
