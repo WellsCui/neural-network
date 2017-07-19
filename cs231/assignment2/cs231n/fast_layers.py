@@ -55,8 +55,8 @@ def conv_forward_strides(x, w, b, conv_param):
   # Figure out output dimensions
   H += 2 * pad
   W += 2 * pad
-  out_h = (H - HH) / stride + 1
-  out_w = (W - WW) / stride + 1
+  out_h = int((H - HH) / stride + 1)
+  out_w = int((W - WW) / stride + 1)
 
   # Perform an im2col operation by picking clever strides
   shape = (C, HH, WW, N, out_h, out_w)

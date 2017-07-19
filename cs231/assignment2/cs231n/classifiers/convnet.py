@@ -38,6 +38,7 @@ class ResNet(object):
         self.dtype = dtype
         self.params_ = {}
         self.weight_scale = weight_scale
+        self.with_residual = True
 
         ############################################################################
         # TODO: Initialize weights and biases for the Residual convolutional       #
@@ -51,25 +52,42 @@ class ResNet(object):
         ############################################################################
 
         conv_metadatas = np.array([[16, 3, 1],
-                                   # [64, 3, 1],
-                                   # [64, 3, 1],
-                                   # [64, 3, 1],
                                    [16, 3, 1],
+                                   # [16, 3, 1],
+                                   # [16, 3, 1],
+                                   # [16, 3, 1],
+                                   # [16, 3, 1],
+                                   # [16, 3, 1],
+                                   # [16, 3, 1],
                                    [32, 3, 1],
-                                   # [128, 3, 1],
-                                   # [128, 3, 1],
                                    [32, 3, 1],
+                                   # [32, 3, 1],
+                                   # [32, 3, 1],
+                                   # [32, 3, 1],
+                                   # [32, 3, 1],
+                                   # [32, 3, 1],
+                                   # [32, 3, 1],
+                                   # [32, 3, 1],
+                                   # [32, 3, 1],
                                    # [64, 3, 1],
-                                   # [256, 3, 1],
-                                   # [256, 3, 1],
+                                   # [64, 3, 1],
+                                   # [64, 3, 1],
+                                   # [64, 3, 1],
+                                   # [64, 3, 1],
                                    # [64, 3, 1],
                                    # [128, 3, 1],
-                                   # [512, 3, 1],
-                                   # [512, 3, 1],
+                                   # [128, 3, 1],
+                                   # [128, 3, 1],
+                                   # [128, 3, 1],
+                                   # [128, 3, 1],
+                                   # [128, 3, 1],
+                                   # [128, 3, 1],
                                    # [128, 3, 1]
                                    ])
 
         conv_input_dim = input_dim
+        print('with_residual:', self.with_residual)
+        print('conv_metadatas.shape:', conv_metadatas.shape)
         self.conv_layers = conv_metadatas.shape[0]
         for i in range(self.conv_layers):
             num_filters, filter_size, stride = conv_metadatas[i]
@@ -100,8 +118,8 @@ class ResNet(object):
         b = np.zeros([num_filters])
         pad = int((filter_size - 1) / 2)
         conv_param = {'stride': stride, 'pad': pad}
-        HH = 1 + (input_dim[1] + 2 * pad - filter_size) / stride
-        WW = 1 + (input_dim[2] + 2 * pad - filter_size) / stride
+        HH = int(1 + (input_dim[1] + 2 * pad - filter_size) / stride)
+        WW = int(1 + (input_dim[2] + 2 * pad - filter_size) / stride)
 
         gamma = np.ones([num_filters * HH * WW])
         beta = np.zeros([num_filters * HH * WW])
@@ -127,7 +145,7 @@ class ResNet(object):
         cache = {}
         for i in range(self.conv_layers):
             i_str = str(i)
-            if np.remainder(i, 2) == 0:
+            if self.with_residual and np.remainder(i, 2) == 0:
                 input = self.add_residual(input, res)
                 res = input
 
@@ -165,7 +183,7 @@ class ResNet(object):
 
         for i in range(self.conv_layers)[::-1]:
             i_str = str(i)
-            if np.remainder(i, 2) == 0:
+            if self.with_residual and np.remainder(i, 2) == 0:
                 dout = self.add_residual(dout, dres)
                 dres = dout
 
