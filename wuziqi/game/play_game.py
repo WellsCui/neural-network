@@ -31,5 +31,3 @@ def play(times):
         print(" winner is", winner)
         print(game.get_state())
 
-
-play(10)
