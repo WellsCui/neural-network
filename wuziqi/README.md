@@ -8,7 +8,7 @@
    
 ## run the game with two random player
 ```python
-import game.play_game
+import game.training
 play(10)
 ```
    

@@ -23,7 +23,10 @@ class WuziqiEvaluator(interfaces.IEvaluator, interfaces.IModel):
         self.states = tf.placeholder(tf.float32)
         self.y = tf.placeholder("float")
         self.lbd = lbd
-        self.kernel_size = [5, 5]
+        self.r = 0.05
+        self.kernel_size = [3, 3]
+        self.pool_size = [2, 2]
+        self.build_train_data = self.build_train_data_td_lambda
         input_layer = tf.reshape(self.states, [-1, board_size[0], board_size[1], 1])
         conv1 = tf.layers.conv2d(
             inputs=input_layer,
@@ -39,19 +42,22 @@ class WuziqiEvaluator(interfaces.IEvaluator, interfaces.IModel):
             # padding="same",
             activation=tf.nn.relu)
 
-        # self.pool2 = tf.layers.max_pooling2d(inputs=self.conv2, pool_size=[2, 2], strides=2)
-        pool2_flat = tf.reshape(conv2, [-1, (board_size[0] - self.kernel_size[0] + 1) *
-                                        (board_size[1] - self.kernel_size[1] + 1) * 64])
+        pool2 = tf.layers.max_pooling2d(inputs=conv2, pool_size=self.pool_size, strides=1)
+
+        flat_size = (board_size[0] - (self.kernel_size[0]-1) - (self.pool_size[0] - 1)) * \
+                    (board_size[1] - (self.kernel_size[1]-1) - (self.pool_size[1] - 1)) * 64
+        pool2_flat = tf.reshape(pool2, [-1, flat_size])
         dense = tf.layers.dense(inputs=pool2_flat, units=1024, activation=tf.nn.relu)
         dropout = tf.layers.dropout(
-            inputs=dense, rate=0.4, training=self.mode == learn.ModeKeys.TRAIN)
+            inputs=dense, rate=0.7, training=self.mode == learn.ModeKeys.TRAIN)
         self.pred = tf.layers.dense(inputs=dropout, units=1)
 
         # Mean squared error
         # loss = tf.reduce_sum(tf.pow(self.pred - self.y, 2)) / (2 * batch_size)
-        loss = tf.losses.mean_squared_error(self.y, self.pred)
+
+        self.loss = tf.losses.mean_squared_error(self.y, self.pred)
         # Gradient descent
-        self.optimizer = tf.train.GradientDescentOptimizer(self.learning_rate).minimize(loss)
+        self.optimizer = tf.train.GradientDescentOptimizer(self.learning_rate).minimize(self.loss)
         init = tf.global_variables_initializer()
         self.sess = tf.Session()
         self.sess.run(init)
@@ -60,20 +66,53 @@ class WuziqiEvaluator(interfaces.IEvaluator, interfaces.IModel):
         x_train, y_train = self.build_train_data(data)
 
         for i in range(100):
-            loss = self.sess.run(self.optimizer,
-                                 {self.states: x_train, self.y: y_train, self.mode: learn.ModeKeys.TRAIN})
-            # print("loss:", loss)
+            _, loss = self.sess.run([self.optimizer, self.loss],
+                                    {self.states: x_train, self.y: y_train, self.mode: learn.ModeKeys.TRAIN})
+            if i == 0:
+                print("loss:", loss)
 
     def predict(self, data):
         return self.sess.run(self.pred, {self.states: data, self.mode: learn.ModeKeys.EVAL})
 
-    def build_train_data(self, data):
+    def build_train_data_td_lambda(self, data):
         x_train = data[:-1]
         train_size = np.shape(x_train)[0]
         y_train = np.zeros((train_size, 1))
+        r = wuziqi.WuziqiGame.eval_state(self.board_size, data[-1]) * self.side
+        target = r
         for i in range(train_size):
-            reward = wuziqi.WuziqiGame.eval_state(self.board_size, data[i + 1]) * self.side
-            y_train[i] = reward + self.lbd * self.predict(data[i + 1])
+            y_train[i] = (1 - self.lbd) * target
+            r = self.lbd * r
+            target = target + r
+
+        return x_train, y_train
+
+    def build_train_data_td(self, data):
+        x_train = data[:-1]
+        train_size = np.shape(x_train)[0]
+        y_train = np.zeros((train_size, 1))
+
+        for i in range(train_size):
+            reward = wuziqi.WuziqiGame.eval_state(self.board_size, data[-1]) * self.side
+            y_train[i] = reward + self.lbd * (self.predict(data[i + 1])[0])
+
+        return x_train, y_train
+
+    def build_train_data_td_eligibility_trace(self, data):
+        x_train = data[:-1]
+        train_size = np.shape(x_train)[0]
+        trace = 0
+        y_train = np.zeros((train_size, 1))
+        bz = self.board_size[0]*self.board_size[0]
+        one = np.ones((1, bz))
+
+        for i in range(train_size):
+            trace = self.r * self.lbd * trace + one.dot(np.reshape(x_train[i], (bz, 1)))
+            reward = wuziqi.WuziqiGame.eval_state(self.board_size, data[-1]) * self.side
+            predicts = self.predict(data[i:i + 2])
+            delta = reward + self.lbd * predicts[1] - predicts[0]
+            y_train[i] = predicts[0] + delta * trace
+
         return x_train, y_train
 
     def evaluate(self, environment: interfaces.IEnvironment):

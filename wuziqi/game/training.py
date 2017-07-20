@@ -13,7 +13,7 @@ def play(times):
         print("Starting Game ", i)
         game = wuziqi.WuziqiGame((11, 11))
         step = 0
-        sleep_time = 5
+        sleep_time = 0
         while True:
             step += 1
             action = player1.act(game)
@@ -43,10 +43,10 @@ def play(times):
         # game.show()
 
 
-play(1)
+# play(10)
 
 
-def train_evaluator(game_times, validate_frequence):
+def train_evaluator(game_times, validate_frequency):
     player1 = agents.WuziqiRandomAgent(1)
     player2 = agents.WuziqiRandomAgent(-1)
     evaluator = evaluators.WuziqiEvaluator(0.95, (11, 11), 100, 0.001, 1)
@@ -73,18 +73,22 @@ def train_evaluator(game_times, validate_frequence):
         # print("Game is ended on step:", step)
 
         # print("state count:", len(states))
-        if i % validate_frequence > 0:
-            evaluator.train(states)
+        val = wuziqi.WuziqiGame.eval_state(game.board_size, game.state)
+        if val == 1:
+            winner = "player1"
+        elif val == -1:
+            winner = "player2"
         else:
-            val = wuziqi.WuziqiGame.eval_state(game.board_size, game.state)
-            if val == 1:
-                winner = "player1"
-            elif val == -1:
-                winner = "player2"
-            else:
-                winner = "nobody"
-            preds = evaluator.predict(states[-1])
-            print(" winner is", winner, "predict value:", preds)
+            winner = "nobody"
+
+        if i % validate_frequency > 0:
+            evaluator.train(states)
+            print(" winner is", winner, "predict after training :", evaluator.predict(states[-2:]))
+        else:
+            preds = evaluator.predict(states[-2:])
+            print(" winner is", winner, "predict without training:", preds)
+        # game.show()
 
 
-# train_evaluator(100, 10)
+
+train_evaluator(1001, 10)
