@@ -27,7 +27,11 @@ class IPolicy(metaclass=ABCMeta):
     def resolve(self, environment: IEnvironment):
         pass
 
-class ITrainable(metaclass=ABCMeta):
+
+class IModel(metaclass=ABCMeta):
     @abstractmethod
     def train(self, data):
+        pass
+    @abstractmethod
+    def predict(self, data):
         pass

@@ -10,11 +10,12 @@ class WuziqiAction(object):
 
 
 class WuziqiGame(game.interfaces.IEnvironment):
-    def __init__(self, board_size, winning_size):
+    SIDES = [-1, 1]
+    WINNING_SIZE = 5
+
+    def __init__(self, board_size):
         self.board_size = board_size
-        self.winning_size = winning_size
         self.state = np.zeros(board_size)
-        self.terminal_point_states = [-1, 1]
 
     def get_state(self):
         return self.state
@@ -26,51 +27,55 @@ class WuziqiGame(game.interfaces.IEnvironment):
     def get_available_points(self):
         return np.where(self.state == 0)
 
-    def eval_row(self, row):
+    @staticmethod
+    def eval_row(row):
         last_val = 0
         repeat_count = 0
         for p in row:
             if p == last_val:
                 repeat_count += 1
-                if (p in self.terminal_point_states) and repeat_count >= self.winning_size:
+                if (p in WuziqiGame.SIDES) and repeat_count >= WuziqiGame.WINNING_SIZE:
                     return p
             else:
                 last_val = p
                 repeat_count = 0
         return 0
 
-    def get_diagonal_row(self, start_x, start_y, end_x, end_y, x_step, y_step):
+    @staticmethod
+    def get_diagonal_row(state, start_x, start_y, end_x, end_y, x_step, y_step):
         # print("start_x, end_x, x_step, start_y, end_y, y_step:", start_x, end_x, x_step, start_y, end_y, y_step)
-        row = self.state[range(start_x, end_x, x_step), range(start_y, end_y, y_step)]
+        row = state[range(start_x, end_x, x_step), range(start_y, end_y, y_step)]
         # print(row)
         return row
 
-    def get_diagonal_rows(self):
+    @staticmethod
+    def get_diagonal_rows(board_size, state):
         rows = []
-        for x in range(self.winning_size - 1, self.board_size[0]):
-            rows.append(self.get_diagonal_row(x, 0, -1, x + 1, -1, 1))
-        for y in range(1, self.board_size[1] - self.winning_size + 1):
-            rows.append(self.get_diagonal_row(self.board_size[0] - 1, y, y - 1, self.board_size[1], -1, 1))
-        for x in range(self.board_size[0] - self.winning_size, 0, -1):
-            rows.append(self.get_diagonal_row(x, 0, self.board_size[0], self.board_size[1] - x, 1, 1))
-        for y in range(self.board_size[1] - self.winning_size + 1):
-            rows.append(self.get_diagonal_row(0, y, self.board_size[0] - y, self.board_size[1], 1, 1))
+        for x in range(WuziqiGame.WINNING_SIZE - 1, board_size[0]):
+            rows.append(WuziqiGame.get_diagonal_row(state, x, 0, -1, x + 1, -1, 1))
+        for y in range(1, board_size[1] - WuziqiGame.WINNING_SIZE + 1):
+            rows.append(WuziqiGame.get_diagonal_row(state, board_size[0] - 1, y, y - 1, board_size[1], -1, 1))
+        for x in range(board_size[0] - WuziqiGame.WINNING_SIZE, 0, -1):
+            rows.append(WuziqiGame.get_diagonal_row(state, x, 0, board_size[0], board_size[1] - x, 1, 1))
+        for y in range(board_size[1] - WuziqiGame.WINNING_SIZE + 1):
+            rows.append(WuziqiGame.get_diagonal_row(state, 0, y, board_size[0] - y, board_size[1], 1, 1))
         return rows
 
-    def eval_state(self):
-        for x in range(self.board_size[0]):
-            val1 = self.eval_row(self.state[x, :])
-            if val1 in self.terminal_point_states:
+    @staticmethod
+    def eval_state(board_size, state):
+        for x in range(board_size[0]):
+            val1 = WuziqiGame.eval_row(state[x, :])
+            if val1 in WuziqiGame.SIDES:
                 return val1
-        for y in range(self.board_size[1]):
-            val2 = self.eval_row(self.state[:, y])
-            if val2 in self.terminal_point_states:
+        for y in range(board_size[1]):
+            val2 = WuziqiGame.eval_row(state[:, y])
+            if val2 in WuziqiGame.SIDES:
                 return val2
-        for row in self.get_diagonal_rows():
-            val3 = self.eval_row(row)
-            if val3 in self.terminal_point_states:
+        for row in WuziqiGame.get_diagonal_rows(board_size, state):
+            val3 = WuziqiGame.eval_row(row)
+            if val3 in WuziqiGame.SIDES:
                 return val3
         return 0
 
     def is_ended(self):
-        return self.eval_state() != 0 or len(self.get_available_points()[0]) == 0
+        return self.eval_state(self.board_size, self.state) != 0 or len(self.get_available_points()[0]) == 0
