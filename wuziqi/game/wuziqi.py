@@ -38,7 +38,7 @@ class WuziqiGame(game.interfaces.IEnvironment):
                     return p
             else:
                 last_val = p
-                repeat_count = 0
+                repeat_count = 1
         return 0
 
     @staticmethod
@@ -79,3 +79,16 @@ class WuziqiGame(game.interfaces.IEnvironment):
 
     def is_ended(self):
         return self.eval_state(self.board_size, self.state) != 0 or len(self.get_available_points()[0]) == 0
+
+    def show(self):
+        condlist = [self.state == 1, self.state == 0, self.state == -1]
+        choicelist = ['X', '-', 'O']
+        printable = np.select(condlist, choicelist)
+
+        def print_row(row):
+            print(' '.join(row))
+
+        print("#########")
+        np.apply_along_axis(print_row, 1, printable)
+        print("#########")
+

@@ -22,7 +22,6 @@ class WuziqiEvaluator(interfaces.IEvaluator, interfaces.IModel):
         # self.states = tf.placeholder(tf.int8, shape=[batch_size, board_size[0], board_size[1], 1])
         self.states = tf.placeholder(tf.float32)
         self.y = tf.placeholder("float")
-        self.reward = 0
         self.lbd = lbd
         self.kernel_size = [5, 5]
         input_layer = tf.reshape(self.states, [-1, board_size[0], board_size[1], 1])
@@ -70,17 +69,11 @@ class WuziqiEvaluator(interfaces.IEvaluator, interfaces.IModel):
 
     def build_train_data(self, data):
         x_train = data[:-1]
-        y_train = self.reward + self.lbd * self.predict(data[1:])
-        for i in range(np.shape(x_train)[0]):
-            val = wuziqi.WuziqiGame.eval_state(self.board_size, x_train[i]) * self.side
-            if val != 0:
-                y_train[i] = [val]
-        val = wuziqi.WuziqiGame.eval_state(self.board_size, data[-1]) * self.side
-        if val != 0:
-            x_train = np.vstack([x_train, [data[-1]]])
-            y_train = np.vstack([y_train, [[val]]])
-        # print(x_train)
-        # print(y_train)
+        train_size = np.shape(x_train)[0]
+        y_train = np.zeros((train_size, 1))
+        for i in range(train_size):
+            reward = wuziqi.WuziqiGame.eval_state(self.board_size, data[i + 1]) * self.side
+            y_train[i] = reward + self.lbd * self.predict(data[i + 1])
         return x_train, y_train
 
     def evaluate(self, environment: interfaces.IEnvironment):

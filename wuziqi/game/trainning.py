@@ -2,6 +2,7 @@ import game.wuziqi as wuziqi
 import game.agents as agents
 import game.evaluators as evaluators
 import numpy as np
+import time
 
 
 def play(times):
@@ -12,15 +13,23 @@ def play(times):
         print("Starting Game ", i)
         game = wuziqi.WuziqiGame((11, 11))
         step = 0
+        sleep_time = 5
         while True:
             step += 1
             action = player1.act(game)
-            # print("player1 take action:", action.x, action.y)
+            print("player1 toke action:", action.x, action.y)
+            game.show()
+            time.sleep(sleep_time)
             if game.is_ended():
+                print("game ended after player1 toke action:", action.x, action.y)
                 break
+
             action = player2.act(game)
-            # print("player2 take action:", action.x, action.y)
+            print("player2 toke action:", action.x, action.y)
+            game.show()
+            time.sleep(sleep_time)
             if game.is_ended():
+                print("game ended after player2 toke action:", action.x, action.y)
                 break
         print("Game is ended on step:", step)
         val = wuziqi.WuziqiGame.eval_state(game.board_size, game.state)
@@ -31,10 +40,10 @@ def play(times):
         else:
             winner = "nobody"
         print(" winner is", winner)
-        print(game.state)
+        # game.show()
 
 
-# play(10)
+play(1)
 
 
 def train_evaluator(game_times, validate_frequence):
@@ -78,4 +87,4 @@ def train_evaluator(game_times, validate_frequence):
             print(" winner is", winner, "predict value:", preds)
 
 
-train_evaluator(100, 10)
+# train_evaluator(100, 10)
