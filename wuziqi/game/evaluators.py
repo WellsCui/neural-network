@@ -26,7 +26,7 @@ class WuziqiEvaluator(interfaces.IEvaluator, interfaces.IModel):
         self.r = 0.05
         self.kernel_size = [3, 3]
         self.pool_size = [2, 2]
-        self.build_train_data = self.build_train_data_td_lambda
+
         input_layer = tf.reshape(self.states, [-1, board_size[0], board_size[1], 1])
         conv1 = tf.layers.conv2d(
             inputs=input_layer,
@@ -64,15 +64,34 @@ class WuziqiEvaluator(interfaces.IEvaluator, interfaces.IModel):
 
     def train(self, data):
         x_train, y_train = self.build_train_data(data)
-
-        for i in range(100):
-            _, loss = self.sess.run([self.optimizer, self.loss],
+        losses = []
+        epic = 1000
+        for i in range(epic):
+            loss, _ = self.sess.run([self.loss, self.optimizer],
                                     {self.states: x_train, self.y: y_train, self.mode: learn.ModeKeys.TRAIN})
-            if i == 0:
-                print("loss:", loss)
+            if i == 0 or i == epic-1:
+                losses.append(loss)
+
+        print("losses:", losses)
 
     def predict(self, data):
         return self.sess.run(self.pred, {self.states: data, self.mode: learn.ModeKeys.EVAL})
+
+    def build_train_data(self, games):
+        x_train = []
+        y_train = []
+        games_shape = np.shape(games)
+
+        for i in range(games_shape[0]):
+            g_x_train, g_y_train = self.build_train_data_td_eligibility_trace(games[i])
+            if len(x_train) == 0:
+                x_train = g_x_train
+                y_train = g_y_train
+            else:
+                x_train = np.vstack((x_train, g_x_train))
+                y_train = np.vstack((y_train, g_y_train))
+        print("shape of training data:", np.shape(x_train))
+        return x_train, y_train
 
     def build_train_data_td_lambda(self, data):
         x_train = data[:-1]
