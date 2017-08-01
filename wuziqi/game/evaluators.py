@@ -27,8 +27,10 @@ class WuziqiEvaluator(interfaces.IEvaluator, interfaces.IModel):
         self.kernel_size = [3, 3]
         self.pool_size = [2, 2]
 
-        input_layer = tf.reshape(self.states, [-1, board_size[0], board_size[1], 1])
+        input_layer = tf.reshape(
+            self.states, [-1, board_size[0], board_size[1], 1], name="input_layer")
         conv1 = tf.layers.conv2d(
+            name="conv1",
             inputs=input_layer,
             filters=32,
             kernel_size=self.kernel_size,
@@ -36,36 +38,41 @@ class WuziqiEvaluator(interfaces.IEvaluator, interfaces.IModel):
             activation=tf.nn.relu)
         # self.pool1 = tf.layers.max_pooling2d(inputs=self.conv1, pool_size=[2, 2], strides=2)
         conv2 = tf.layers.conv2d(
+            name="conv2",
             inputs=conv1,
             filters=64,
             kernel_size=self.kernel_size,
             # padding="same",
             activation=tf.nn.relu)
 
-        pool2 = tf.layers.max_pooling2d(inputs=conv2, pool_size=self.pool_size, strides=1)
+        pool2 = tf.layers.max_pooling2d(name="pool2", inputs=conv2, pool_size=self.pool_size, strides=1)
 
         flat_size = (board_size[0] - (self.kernel_size[0]-1) - (self.pool_size[0] - 1)) * \
                     (board_size[1] - (self.kernel_size[1]-1) - (self.pool_size[1] - 1)) * 64
         pool2_flat = tf.reshape(pool2, [-1, flat_size])
-        dense = tf.layers.dense(inputs=pool2_flat, units=1024, activation=tf.nn.relu)
-        dropout = tf.layers.dropout(
-            inputs=dense, rate=0.7, training=self.mode == learn.ModeKeys.TRAIN)
-        self.pred = tf.layers.dense(inputs=dropout, units=1)
+        dense = tf.layers.dense(name="dense", inputs=pool2_flat, units=1024, activation=tf.nn.relu)
+        dropout = tf.layers.dropout(name="dropout",
+            inputs=dense, rate=0.4, training=self.mode == learn.ModeKeys.TRAIN)
+        self.pred = tf.layers.dense(name="pred", inputs=dropout, units=1)
+        # self.action = tf.layers.dense(name="pred", inputs=dropout, units=1)
 
         # Mean squared error
         # loss = tf.reduce_sum(tf.pow(self.pred - self.y, 2)) / (2 * batch_size)
 
         self.loss = tf.losses.mean_squared_error(self.y, self.pred)
         # Gradient descent
+
         self.optimizer = tf.train.GradientDescentOptimizer(self.learning_rate).minimize(self.loss)
         init = tf.global_variables_initializer()
+
+        print("trainable_variables:", tf.trainable_variables())
         self.sess = tf.Session()
         self.sess.run(init)
 
     def train(self, data):
         x_train, y_train = self.build_train_data(data)
         losses = []
-        epic = 1000
+        epic = 100
         for i in range(epic):
             loss, _ = self.sess.run([self.loss, self.optimizer],
                                     {self.states: x_train, self.y: y_train, self.mode: learn.ModeKeys.TRAIN})
@@ -83,7 +90,7 @@ class WuziqiEvaluator(interfaces.IEvaluator, interfaces.IModel):
         games_shape = np.shape(games)
 
         for i in range(games_shape[0]):
-            g_x_train, g_y_train = self.build_train_data_td_eligibility_trace(games[i])
+            g_x_train, g_y_train = self.build_train_data_td_lambda(games[i])
             if len(x_train) == 0:
                 x_train = g_x_train
                 y_train = g_y_train

@@ -78,4 +78,6 @@ def eval_state(state):
 
 s = random_state()
 print(s)
-print(np.where(s == 0))
+print(s.reshape((11, 11, 1)))
+
+# print(np.where(s == 0))
