@@ -6,5 +6,3 @@ def partial_random(preferred_choice, random_choices, preferred_rate):
         return preferred_choice
     else:
         return np.random.choice(random_choices)
-
-print(partial_random(100, range(5), 0.5))

@@ -188,7 +188,7 @@ def run_competing_agent(times):
                 break
             else:
                 player2.act(game)
-            game.show()
+                game.show()
 
         print("Game is ended on step:", step)
         val = wuziqi.WuziqiGame.eval_state(game.board_size, game.state)
