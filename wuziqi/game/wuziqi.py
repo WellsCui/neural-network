@@ -92,3 +92,7 @@ class WuziqiGame(game.interfaces.IEnvironment):
         np.apply_along_axis(print_row, 1, printable)
         print("#########")
 
+    def clone(self):
+        cloned = WuziqiGame(self.board_size)
+        cloned.state = self.state.copy()
+        return cloned

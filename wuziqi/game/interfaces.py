@@ -9,6 +9,8 @@ class IEnvironment(metaclass=ABCMeta):
     def update(self, action):
         pass
 
+    def clone(self):
+        pass
 
 class IAgent(metaclass=ABCMeta):
     @abstractmethod
@@ -24,7 +26,7 @@ class IEvaluator(metaclass=ABCMeta):
 
 class IPolicy(metaclass=ABCMeta):
     @abstractmethod
-    def resolve(self, environment: IEnvironment):
+    def suggest(self, state, side, suggest_count):
         pass
 
 

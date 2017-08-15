@@ -20,7 +20,7 @@ class WuziqiPolicyAgent(interfaces.IAgent):
         self.policy = policy
 
     def act(self, environment: interfaces.IEnvironment):
-        action = self.policy.resolve(environment)
+        action = self.policy.suggest(environment.get_state())
         environment.update(action)
         return action
 

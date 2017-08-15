@@ -4,6 +4,7 @@ import game.evaluators as evaluators
 import numpy as np
 import time
 import game.actor_critic_agent as ac_agent
+import game.competing_agent as competing_agent
 
 
 def play(times):
@@ -134,17 +135,22 @@ def run_actor_critic_agent(times):
         current_state = game.get_state()
         current_action = player1.act(game)
 
-        while not game.is_ended():
+        while True:
             step += 1
             r = get_reward(game)
             if game.is_ended():
                 next_state = game.get_state()
                 next_action = wuziqi.WuziqiAction(0, 0, 0)
+                player1.learn(current_state, current_action, r, next_state, next_action)
+                break
             else:
                 player2.act(game)
                 next_state = game.get_state()
                 if game.is_ended():
+                    game.show()
                     next_action = wuziqi.WuziqiAction(0, 0, 0)
+                    player1.learn(current_state, current_action, get_reward(game), next_state, next_action)
+                    break
                 else:
                     next_action = player1.act(game)
             game.show()
@@ -156,15 +162,48 @@ def run_actor_critic_agent(times):
         val = wuziqi.WuziqiGame.eval_state(game.board_size, game.state)
         if val == 1:
             wins += 1
-            winner = "player1 " + wins + "out of " + str(i+1)
+            winner = "player1 " + str(wins) + " out of " + str(i+1)
 
         elif val == -1:
-            winner = "player2 " + str(i+1 - wins) + "out of " + str(i+1)
+            winner = "player2 " + str(i+1 - wins) + " out of " + str(i+1)
         else:
             winner = "nobody"
         print(" winner is", winner)
         # game.show()
 
 
+def run_competing_agent(times):
+    player1 = competing_agent.CompetingAgent((11, 11), 0.001, 1, 0.95)
+    player2 = competing_agent.CompetingAgent((11, 11), 0.001, -1, 0.95)
+    wins = 0
+    for i in range(times):
+        print("Starting Game ", i)
+        game = wuziqi.WuziqiGame((11, 11))
+        step = 0
+        while not game.is_ended():
+            step += 1
+            player1.act(game)
+            game.show()
+            if game.is_ended():
+                break
+            else:
+                player2.act(game)
+            game.show()
+
+        print("Game is ended on step:", step)
+        val = wuziqi.WuziqiGame.eval_state(game.board_size, game.state)
+        if val == 1:
+            wins += 1
+            winner = "player1 " + str(wins) + " out of " + str(i+1)
+
+        elif val == -1:
+            winner = "player2 " + str(i+1 - wins) + " out of " + str(i+1)
+        else:
+            winner = "nobody"
+        print(" winner is", winner)
+
+run_competing_agent(100)
+
+
 # train_evaluator(1000, 100)
-run_actor_critic_agent(10)
+#run_actor_critic_agent(10)
