@@ -22,6 +22,7 @@ class WuziqiGame(game.interfaces.IEnvironment):
 
     def update(self, action):
         self.state[action.x, action.y] = action.val
+        self.last_action = action
         return self.state
 
     def get_available_points(self):
@@ -89,7 +90,24 @@ class WuziqiGame(game.interfaces.IEnvironment):
             print(' '.join(row))
 
         print("#########")
-        np.apply_along_axis(print_row, 1, printable)
+        # np.apply_along_axis(print_row, 1, printable)
+        for y in range(self.board_size[1]):
+            row = []
+            for x in range(self.board_size[0]):
+                state = self.state[x, y]
+                if self.last_action.x == x and self.last_action.y == y:
+                    if self.last_action.val == 1:
+                        row.append('*')
+                    else:
+                        row.append('@')
+                elif state == 1:
+                    row.append('X')
+                elif state == -1:
+                    row.append('0')
+                else:
+                    row.append('-')
+            print(' '.join(row))
+
         print("#########")
 
     def clone(self):

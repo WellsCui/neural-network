@@ -42,6 +42,7 @@ def play(times):
         else:
             winner = "nobody"
         print(" winner is", winner)
+
         # game.show()
 
 
@@ -172,37 +173,54 @@ def run_actor_critic_agent(times):
         # game.show()
 
 
-def run_competing_agent(times):
+def run_competing_agent(times, restored):
     player1 = competing_agent.CompetingAgent((11, 11), 0.001, 1, 0.95)
     player2 = competing_agent.CompetingAgent((11, 11), 0.001, -1, 0.95)
+
+    # if restored:
+    #     player1.restore("/tmp/player1")
+    #     player1.restore("/tmp/player2")
+
     wins = 0
+
+    def move(player, game):
+        action = player.act(game)
+        game.show()
+        return game.is_ended()
+
     for i in range(times):
         print("Starting Game ", i)
         game = wuziqi.WuziqiGame((11, 11))
         step = 0
-        while not game.is_ended():
+        if i % 2 == 0:
+            first_player = player1
+            second_player = player2
+        else:
+            first_player = player2
+            second_player = player1
+        while True:
             step += 1
-            player1.act(game)
-            game.show()
-            if game.is_ended():
+            if move(first_player, game):
                 break
-            else:
-                player2.act(game)
-                game.show()
+            if move(second_player, game):
+                break
 
         print("Game is ended on step:", step)
         val = wuziqi.WuziqiGame.eval_state(game.board_size, game.state)
         if val == 1:
             wins += 1
             winner = "player1 " + str(wins) + " out of " + str(i+1)
-
+            player1.increase_greedy()
         elif val == -1:
             winner = "player2 " + str(i+1 - wins) + " out of " + str(i+1)
+            player2.increase_greedy()
         else:
             winner = "nobody"
-        print(" winner is", winner)
+        print("Winner is", winner)
+        # player1.save("/tmp/player1")
+        # player1.save("/tmp/player2")
 
-run_competing_agent(100)
+run_competing_agent(100, False)
 
 
 # train_evaluator(1000, 100)

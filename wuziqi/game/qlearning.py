@@ -3,6 +3,7 @@ import numpy as np
 import game.interfaces as interfaces
 import game.wuziqi as wuziqi
 import game.utils
+import os
 import tensorflow as tf
 from tensorflow.contrib import learn
 
@@ -54,7 +55,7 @@ class WuziqiQValueNet(interfaces.IEvaluator):
             inputs=pool2_flat, units=1024, activation=tf.nn.relu)
         dropout = tf.layers.dropout(
             # name="dropout",
-            inputs=dense, rate=0.4, training=self.mode == learn.ModeKeys.TRAIN)
+            inputs=dense, rate=0.7, training=self.mode == learn.ModeKeys.TRAIN)
         self.pred = tf.layers.dense(
             # name="pred",
             inputs=dropout, units=1)
@@ -118,6 +119,17 @@ class WuziqiQValueNet(interfaces.IEvaluator):
 
         return inputs, y
 
+    def save(self, save_path):
+        saver = tf.train.Saver()
+        save_dir = save_path + "/qvalue_ckpts"
+        if not os.path.exists(save_dir):
+            os.makedirs(save_dir)
+        return saver.save(self.sess, save_dir + "/qvalue_ckpts")
+
+    def restore(self, save_path):
+        saver = tf.train.Saver()
+        return saver.restore(self.sess, save_path + "/qvalue_ckpts")
+
 
 class WuziqiPolicyNet(interfaces.IPolicy):
     def __init__(self, board_size, learning_rate, lbd):
@@ -162,7 +174,7 @@ class WuziqiPolicyNet(interfaces.IPolicy):
             inputs=pool2_flat, units=1024, activation=tf.nn.relu)
         dropout = tf.layers.dropout(
             # name="policy_dropout",
-            inputs=dense, rate=0.4, training=self.mode == learn.ModeKeys.TRAIN)
+            inputs=dense, rate=0.7, training=self.mode == learn.ModeKeys.TRAIN)
         self.pred = tf.layers.dense(
             # name="policy_pred",
             inputs=dropout, units=board_size[0] * board_size[1])
@@ -233,3 +245,14 @@ class WuziqiPolicyNet(interfaces.IPolicy):
             if i == 0:
                 print("policy losses:", loss)
         print("policy losses:", loss)
+
+    def save(self, save_path):
+        saver = tf.train.Saver()
+        save_dir = save_path + "/policy_ckpts"
+        if not os.path.exists(save_dir):
+            os.makedirs(save_dir)
+        return saver.save(self.sess, save_dir)
+
+    def restore(self, save_path):
+        saver = tf.train.Saver()
+        return saver.restore(self.sess, save_path + "/policy_ckpts")
