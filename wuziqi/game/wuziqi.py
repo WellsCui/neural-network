@@ -100,9 +100,9 @@ class WuziqiGame(game.interfaces.IEnvironment):
                 state = self.state[x, y]
                 if self.last_action.x == x and self.last_action.y == y:
                     if self.last_action.val == 1:
-                        row.append('*')
+                        row.append('#')
                     else:
-                        row.append('@')
+                        row.append('&')
                 elif state == 1:
                     row.append('X')
                 elif state == -1:

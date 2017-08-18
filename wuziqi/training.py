@@ -224,7 +224,7 @@ def run_competing_agent(times, restored):
         # player1.save("/tmp/player1")
         # player1.save("/tmp/player2")
 
-run_competing_agent(100, False)
+run_competing_agent(1000, False)
 
 
 # train_evaluator(1000, 100)

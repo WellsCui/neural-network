@@ -24,7 +24,8 @@ class CompetingAgent(interfaces.IAgent):
 
     def act(self, environment: interfaces.IEnvironment):
         state = environment.get_state().copy()
-        select_count = int(self.think_width * self.greedy_rate)
+        # select_count = int(self.think_width * self.greedy_rate)
+        select_count = 1
         actions = self.policy.suggest(state, self.side, select_count)
         available_actions = self.get_available_actions(environment, self.side)
         actions += random.sample(available_actions, self.think_width - select_count)
@@ -52,7 +53,6 @@ class CompetingAgent(interfaces.IAgent):
         environment.update(actions[choice])
         return actions[choice]
 
-
     def increase_greedy(self):
         self.greedy_rate += (1 - self.greedy_rate) * self.epslon
         print("greedy : ", self.greedy_rate)
@@ -70,7 +70,7 @@ class CompetingAgent(interfaces.IAgent):
         h = []
         for h1, h2, final_state in rehearsals:
             h.append(h1)
-            # h.append(h2)
+            h.append(h2)
         self.qnet.train(h)
         self.policy_training_data.append([state, chosen_action])
         if len(self.policy_training_data) == self.policy_trainning_size:
