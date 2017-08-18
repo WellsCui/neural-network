@@ -198,6 +198,10 @@ def run_competing_agent(times, restored):
         else:
             first_player = player2
             second_player = player1
+        player1.is_greedy = i % 3 == 0
+        player2.is_greedy = i % 4 == 0
+        print("player1 greedy: ", player1.is_greedy)
+        print("player2 greedy: ", player2.is_greedy)
         while True:
             step += 1
             if move(first_player, game):

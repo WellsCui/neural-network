@@ -15,10 +15,12 @@ class CompetingAgent(interfaces.IAgent):
         self.lbd = lbd
         self.think_depth = 5
         self.think_width = 10
-        self.policy_trainning_data = []
+        self.policy_training_data = []
         self.policy_trainning_size = 50
         self.epslon = 0.001
-        self.greedy = 0.5
+        self.greedy_rate = 0.5
+        self.board_size = board_size
+        self.is_greedy = False
 
     def act(self, environment: interfaces.IEnvironment):
         state = environment.get_state().copy()
@@ -30,16 +32,37 @@ class CompetingAgent(interfaces.IAgent):
         for act in actions:
             rehearsals.append(self.rehearsal(environment.clone(), act, self.policy, self.think_depth))
 
-        best_choice = np.argmax([self.evalue_rehearsal(rehearsal) for rehearsal in rehearsals])
-        choice = game.utils.partial_random(best_choice, range(self.think_width), self.greedy)
+        best_choice = np.argmax([self.evaluate_rehearsal(rehearsal) for rehearsal in rehearsals])
+        choice = game.utils.partial_random(best_choice, range(self.think_width), self.greedy_rate)
+
+        print("before training best action (%d, %d) value: %f, policy suggested action  (%d, %d) value: %f, actual action (%d, %d) value: %f" %
+              (actions[best_choice].x, actions[best_choice].y,
+               self.qnet.evaluate(state, actions[best_choice]),
+               actions[0].x, actions[0].y,
+               self.qnet.evaluate(state, actions[0]),
+               actions[choice].x, actions[choice].y,
+               self.qnet.evaluate(state, actions[choice])))
 
         self.learn_from_rehearsal(state, rehearsals, actions[best_choice])
-        environment.update(actions[choice])
-        return actions[choice]
+
+        print("after training best action (%d, %d) value: %f, policy suggested action  (%d, %d) value: %f, actual action (%d, %d) value: %f" %
+              (actions[best_choice].x, actions[best_choice].y,
+               self.qnet.evaluate(state, actions[best_choice]),
+               actions[0].x, actions[0].y,
+               self.qnet.evaluate(state, actions[0]),
+               actions[choice].x, actions[choice].y,
+               self.qnet.evaluate(state, actions[choice])))
+        if self.is_greedy:
+            environment.update(actions[best_choice])
+            return actions[best_choice]
+        else:
+            environment.update(actions[choice])
+            return actions[choice]
+
 
     def increase_greedy(self):
-        self.greedy += (1 - self.greedy) * self.epslon
-        print("greedy : ", self.greedy)
+        self.greedy_rate += (1 - self.greedy_rate) * self.epslon
+        print("greedy : ", self.greedy_rate)
 
     def learn(self, current_state, current_action, r, next_state, next_action):
         qnet_value = self.qnet.evaluate(current_state, current_action)[0, 0]
@@ -51,23 +74,28 @@ class CompetingAgent(interfaces.IAgent):
         self.policy.apply_gradient(current_state, current_action, corrected_qnet_value)
 
     def learn_from_rehearsal(self, state, rehearsals, chosen_action):
-        history1 = [h1+h2 for h1, h2 in rehearsals]
-        # history2 = [h2 for h1, h2 in rehearsals]
-        self.qnet.train(history1)
-        # self.qnet.train(history2)
-        self.policy_trainning_data.append([state, chosen_action])
-        if len(self.policy_trainning_data) == self.policy_trainning_size:
-            self.policy.train(self.policy_trainning_data)
-            self.policy_trainning_data = []
+        h = []
+        for h1, h2, final_state in rehearsals:
+            h.append(h1)
+            h.append(h2)
+        self.qnet.train(h)
+        self.policy_training_data.append([state, chosen_action])
+        if len(self.policy_training_data) == self.policy_trainning_size:
+            self.policy.train(self.policy_training_data)
+            self.policy_training_data = []
 
-    def evalue_rehearsal(self, rehearsal):
-        history, opponent_history = rehearsal
+    def evaluate_rehearsal(self, rehearsal):
+        history, opponent_history, final_state = rehearsal
         state, action, reward = history[-1]
+
+        if final_state == 1:
+            return 1
+
         if len(opponent_history) > 0:
             opponent_state, opponent_action, opponent_reward = opponent_history[-1]
             return self.qnet.evaluate(state, action) - self.qnet.evaluate(opponent_state, opponent_action)
-        else:
-            return self.qnet.evaluate(state, action)
+
+        return self.qnet.evaluate(state, action)
 
     @staticmethod
     def get_available_actions(environment: interfaces.IEnvironment, side):
@@ -82,12 +110,13 @@ class CompetingAgent(interfaces.IAgent):
             return wuziqi.WuziqiGame.eval_state(environment.board_size, environment.get_state()) * side
 
         def get_partial_random_action(best_action, side):
-            return game.utils.partial_random(best_action, self.get_available_actions(environment, side), self.greedy)
+            return game.utils.partial_random(best_action, self.get_available_actions(environment, side), self.greedy_rate)
 
         history1 = []
         history2 = []
         next_state_1 = environment.get_state().copy()
         next_action_1 = action
+        final_state = 0
 
         while steps > 0:
             steps -= 1
@@ -96,11 +125,13 @@ class CompetingAgent(interfaces.IAgent):
             history1.append([next_state_1, next_action_1, r1])
             if environment.is_ended():
                 next_state_1 = environment.get_state().copy()
-                next_action_1 = wuziqi.WuziqiAction(0, 0, 0)
+                # next_action_1 = wuziqi.WuziqiAction(0, 0, 0)
                 history1.append([next_state_1, next_action_1, 0])
+                history1.append([np.zeros(environment.board_size), wuziqi.WuziqiAction(0, 0, 0), 0])
                 if len(history2) > 0:
-                    history2[-1][-1] = -1
-                    history2.append([next_state_1 * -1, next_action_1, 0])
+                    # history2[-1][-1] = -1
+                    history2.append([next_state_1 * -1, wuziqi.WuziqiAction(0, 0, 0), 0])
+                final_state = 1
                 break
             else:
                 next_state_2 = environment.get_state().copy() * -1
@@ -112,15 +143,17 @@ class CompetingAgent(interfaces.IAgent):
                 history2.append([next_state_2, next_action_2, r2])
 
                 if environment.is_ended():
-                    history1[-1][-1] = -1
+                    # history1[-1][-1] = -1
                     next_action_1 = wuziqi.WuziqiAction(0, 0, 0)
                     history1.append([state, next_action_1, 0])
-                    history2.append([state * -1, next_action_1, 0])
+                    history2.append([state * -1, next_action_2, 0])
+                    history2.append([np.zeros(environment.board_size), wuziqi.WuziqiAction(0, 0, 0), 0])
+                    final_state = -1
                     break
                 else:
                     next_state_1 = state
                     next_action_1 = get_partial_random_action(self.policy.suggest(state, self.side, 1)[0], self.side)
-        return history1, history2
+        return history1, history2, final_state
 
     def save(self, save_dir):
         self.qnet.save(save_dir)
