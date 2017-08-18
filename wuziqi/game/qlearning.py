@@ -115,7 +115,10 @@ class WuziqiQValueNet(interfaces.IEvaluator):
                 state, action, reward = session[index]
                 next_state, next_action, next_reward = session[index + 1]
                 inputs.append(self.build_state_action(state, action))
-                y.append(reward + self.lbd * self.evaluate(next_state, next_action))
+                if reward == 1:
+                    y.append(1)
+                else:
+                    y.append(reward + self.lbd * self.evaluate(next_state, next_action))
 
         return inputs, y
 
@@ -203,7 +206,7 @@ class WuziqiPolicyNet(interfaces.IPolicy):
 
         actions = []
         reshaped_pred[filled_pos] = -1
-        legitimate_actions = np.where(reshaped_pred != -1)
+        # legitimate_actions = np.where(reshaped_pred != -1)
 
         for i in range(count):
             index = np.unravel_index(np.argmax(reshaped_pred), self.board_size)

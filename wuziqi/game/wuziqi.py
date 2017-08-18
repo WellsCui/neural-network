@@ -8,6 +8,9 @@ class WuziqiAction(object):
         self.y = y
         self.val = val
 
+    def reverse(self):
+        return WuziqiAction(self.x, self.y, self.val * -1)
+
 
 class WuziqiGame(game.interfaces.IEnvironment):
     SIDES = [-1, 1]
