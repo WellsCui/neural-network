@@ -40,16 +40,30 @@ class CompetingAgent(interfaces.IAgent):
         else:
             choice = game.utils.partial_random(best_choice, range(self.think_width), self.greedy_rate)
 
-        print("best (%d, %d) value: %f in selection %s,  actual (%d, %d) value: %f, in selection %s is best %s" %
+        print("best (%d, %d) value: %f in selection %s, policy (%d, %d) value: %f  actual (%d, %d) value: %f, in selection %s is best %s" %
               (actions[best_choice].x, actions[best_choice].y,
                self.qnet.evaluate(state, actions[best_choice]),
                best_choice < select_count,
+               actions[0].x, actions[0].y,
+               self.qnet.evaluate(state, actions[0]),
                actions[choice].x, actions[choice].y,
                self.qnet.evaluate(state, actions[choice]),
                choice < select_count,
                choice == best_choice))
 
         self.learn_from_rehearsal(state, rehearsals, actions[best_choice])
+
+        print("best (%d, %d) value: %f in selection %s, policy (%d, %d) value: %f  actual (%d, %d) value: %f, in selection %s is best %s" %
+              (actions[best_choice].x, actions[best_choice].y,
+               self.qnet.evaluate(state, actions[best_choice]),
+               best_choice < select_count,
+               actions[0].x, actions[0].y,
+               self.qnet.evaluate(state, actions[0]),
+               actions[choice].x, actions[choice].y,
+               self.qnet.evaluate(state, actions[choice]),
+               choice < select_count,
+               choice == best_choice))
+
         environment.update(actions[choice])
         return actions[choice]
 
@@ -117,7 +131,7 @@ class CompetingAgent(interfaces.IAgent):
             history1.append([next_state_1, next_action_1, r1])
             if environment.is_ended():
                 next_state_1 = environment.get_state().copy()
-                # next_action_1 = wuziqi.WuziqiAction(0, 0, 0)
+                next_action_1 = wuziqi.WuziqiAction(0, 0, 0)
                 history1.append([next_state_1, next_action_1, 0])
                 # history1.append([np.zeros(environment.board_size), wuziqi.WuziqiAction(0, 0, 0), 0])
                 if len(history2) > 0:
@@ -126,7 +140,7 @@ class CompetingAgent(interfaces.IAgent):
                 final_state = 1
                 break
             else:
-                next_state_2 = environment.get_state().copy() * -1
+                next_state_2 = environment.reverse().get_state().copy()
                 next_action_2 = get_partial_random_action(opponent_policy.suggest(next_state_2, self.side * -1, 1)[0],
                                                           self.side * -1)
 

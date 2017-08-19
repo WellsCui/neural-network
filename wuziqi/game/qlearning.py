@@ -28,34 +28,42 @@ class WuziqiQValueNet(interfaces.IEvaluator):
         conv1 = tf.layers.conv2d(
             # name="conv1",
             inputs=input_layer,
+            filters=16,
+            kernel_size=self.kernel_size,
+            padding="same",
+            activation=tf.nn.relu)
+
+        conv2 = tf.layers.conv2d(
+            # name="conv2",
+            inputs=conv1,
             filters=32,
             kernel_size=self.kernel_size,
             padding="same",
             activation=tf.nn.relu)
         # self.pool1 = tf.layers.max_pooling2d(inputs=self.conv1, pool_size=[2, 2], strides=2)
-        conv2 = tf.layers.conv2d(
-            # name="conv2",
-            inputs=conv1,
+        conv3 = tf.layers.conv2d(
+            # name="conv3",
+            inputs=conv2,
             filters=64,
             kernel_size=self.kernel_size,
             # padding="same",
             activation=tf.nn.relu)
 
-        pool2 = tf.layers.max_pooling2d(
+        pool3 = tf.layers.max_pooling2d(
             # name="pool2",
-            inputs=conv2,
+            inputs=conv3,
             pool_size=self.pool_size,
             strides=1)
 
         flat_size = (board_size[0] - (self.kernel_size[0] - 1) - (self.pool_size[0] - 1)) * \
                     (board_size[1] - (self.kernel_size[1] - 1) - (self.pool_size[1] - 1)) * 64
-        pool2_flat = tf.reshape(pool2, [-1, flat_size])
+        pool_flat = tf.reshape(pool3, [-1, flat_size])
         dense = tf.layers.dense(
             # name="dense",
-            inputs=pool2_flat, units=1024, activation=tf.nn.relu)
+            inputs=pool_flat, units=4096, activation=tf.nn.relu)
         dropout = tf.layers.dropout(
             # name="dropout",
-            inputs=dense, rate=0.7, training=self.mode == learn.ModeKeys.TRAIN)
+            inputs=dense, rate=0.5, training=self.mode == learn.ModeKeys.TRAIN)
         self.pred = tf.layers.dense(
             # name="pred",
             inputs=dropout, units=1)
@@ -95,7 +103,7 @@ class WuziqiQValueNet(interfaces.IEvaluator):
                                 self.mode: learn.ModeKeys.TRAIN})
 
     def train(self, data):
-        state_actions, y = self.build_training_data(data)
+        state_actions, y = self.build_training_data2(data)
         epic = 100
         loss = 0
         for i in range(epic):
@@ -115,11 +123,34 @@ class WuziqiQValueNet(interfaces.IEvaluator):
                 state, action, reward = session[index]
                 next_state, next_action, next_reward = session[index + 1]
                 inputs.append(self.build_state_action(state, action))
+
                 if reward == 1:
                     y.append(1)
                 else:
                     y.append(reward + self.lbd * self.evaluate(next_state, next_action))
+        return inputs, y
 
+    def build_training_data2(self, data):
+        inputs = []
+        y = []
+        for session in data:
+            steps = len(session)
+            if steps < 2:
+                continue
+            end_state, end_action, end_reward = session[-1]
+            end_value = 0
+            if end_action.val != 0:
+                end_value = self.evaluate(end_state, end_action)
+
+            for index in range(steps - 1, 0, -1):
+                state, action, reward = session[index]
+                inputs.append(self.build_state_action(state, action))
+                if reward == 1:
+                    end_value = 1
+                    y.append(end_value)
+                else:
+                    end_value = reward + self.lbd * end_value
+                    y.append(end_value)
         return inputs, y
 
     def save(self, save_path):
@@ -149,35 +180,44 @@ class WuziqiPolicyNet(interfaces.IPolicy):
 
         input_layer = tf.reshape(
             self.state, [-1, board_size[0], board_size[1], 1], name="policy_input_layer")
+
         conv1 = tf.layers.conv2d(
-            # name="policy_conv1",
+            # name="conv1",
             inputs=input_layer,
+            filters=16,
+            kernel_size=self.kernel_size,
+            padding="same",
+            activation=tf.nn.relu)
+
+        conv2 = tf.layers.conv2d(
+            # name="policy_conv1",
+            inputs=conv1,
             filters=32,
             kernel_size=self.kernel_size,
             padding="same",
             activation=tf.nn.relu)
         # self.pool1 = tf.layers.max_pooling2d(inputs=self.conv1, pool_size=[2, 2], strides=2)
-        conv2 = tf.layers.conv2d(
+        conv3 = tf.layers.conv2d(
             # name="policy_conv2",
-            inputs=conv1,
+            inputs=conv2,
             filters=64,
             kernel_size=self.kernel_size,
             # padding="same",
             activation=tf.nn.relu)
 
-        pool2 = tf.layers.max_pooling2d(
+        pool3 = tf.layers.max_pooling2d(
             # name="policy_pool2",
-            inputs=conv2, pool_size=self.pool_size, strides=1)
+            inputs=conv3, pool_size=self.pool_size, strides=1)
 
         flat_size = (board_size[0] - (self.kernel_size[0] - 1) - (self.pool_size[0] - 1)) * \
                     (board_size[1] - (self.kernel_size[1] - 1) - (self.pool_size[1] - 1)) * 64
-        pool2_flat = tf.reshape(pool2, [-1, flat_size])
+        pool_flat = tf.reshape(pool3, [-1, flat_size])
         dense = tf.layers.dense(
             # name="policy_dense",
-            inputs=pool2_flat, units=1024, activation=tf.nn.relu)
+            inputs=pool_flat, units=4096, activation=tf.nn.relu)
         dropout = tf.layers.dropout(
             # name="policy_dropout",
-            inputs=dense, rate=0.7, training=self.mode == learn.ModeKeys.TRAIN)
+            inputs=dense, rate=0.5, training=self.mode == learn.ModeKeys.TRAIN)
         self.pred = tf.layers.dense(
             # name="policy_pred",
             inputs=dropout, units=board_size[0] * board_size[1])

@@ -117,3 +117,10 @@ class WuziqiGame(game.interfaces.IEnvironment):
         cloned = WuziqiGame(self.board_size)
         cloned.state = self.state.copy()
         return cloned
+
+    def reverse(self):
+        cloned = WuziqiGame(self.board_size)
+        cloned.state = self.state * -1
+        cloned.last_action = self.last_action
+        cloned.last_action.val *= -1
+        return cloned
