@@ -173,15 +173,18 @@ def run_actor_critic_agent(times):
         # game.show()
 
 
-def run_competing_agent(times, restored):
-    player1 = competing_agent.CompetingAgent((11, 11), 0.001, 1, 0.95)
-    player2 = competing_agent.CompetingAgent((11, 11), 0.001, -1, 0.95)
+def run_competing_agent(times, train_all_after, restored):
+    board_size = (11, 11)
+    player1 = competing_agent.CompetingAgent("player1", board_size, 0.005, 1, 0.90)
+    player2 = competing_agent.CompetingAgent("player2", board_size, 0.005, -1, 0.90)
 
     # if restored:
     #     player1.restore("/tmp/player1")
     #     player1.restore("/tmp/player2")
 
     wins = 0
+
+    # train_all_after = 1
 
     def move(player, game):
         action = player.act(game)
@@ -190,8 +193,11 @@ def run_competing_agent(times, restored):
 
     for i in range(times):
         print("Starting Game ", i)
-        game = wuziqi.WuziqiGame((11, 11))
+        game = wuziqi.WuziqiGame(board_size)
         step = 0
+        if i > train_all_after:
+            player1.train_sessions_with_end_only = False
+            player2.train_sessions_with_end_only = False
         if i % 2 == 0:
             first_player = player1
             second_player = player2
@@ -224,7 +230,8 @@ def run_competing_agent(times, restored):
         # player1.save("/tmp/player1")
         # player1.save("/tmp/player2")
 
-run_competing_agent(1000, False)
+
+run_competing_agent(1000, 200, False)
 
 
 # train_evaluator(1000, 100)

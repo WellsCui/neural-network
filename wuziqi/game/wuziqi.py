@@ -19,6 +19,7 @@ class WuziqiGame(game.interfaces.IEnvironment):
     def __init__(self, board_size):
         self.board_size = board_size
         self.state = np.zeros(board_size)
+        self.last_action = WuziqiAction(0, 0, 0)
 
     def get_state(self):
         return self.state
@@ -92,7 +93,6 @@ class WuziqiGame(game.interfaces.IEnvironment):
         def print_row(row):
             print(' '.join(row))
 
-        print("#########")
         # np.apply_along_axis(print_row, 1, printable)
         for y in range(self.board_size[1]):
             row = []
@@ -101,12 +101,12 @@ class WuziqiGame(game.interfaces.IEnvironment):
                 if self.last_action.x == x and self.last_action.y == y:
                     if self.last_action.val == 1:
                         row.append('#')
-                    else:
-                        row.append('&')
+                    elif self.last_action.val == -1:
+                        row.append('%')
                 elif state == 1:
                     row.append('X')
                 elif state == -1:
-                    row.append('0')
+                    row.append('O')
                 else:
                     row.append('-')
             print(' '.join(row))
@@ -121,6 +121,5 @@ class WuziqiGame(game.interfaces.IEnvironment):
     def reverse(self):
         cloned = WuziqiGame(self.board_size)
         cloned.state = self.state * -1
-        cloned.last_action = self.last_action
-        cloned.last_action.val *= -1
+        cloned.last_action = self.last_action.reverse()
         return cloned

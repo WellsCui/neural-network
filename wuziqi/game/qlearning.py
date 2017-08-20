@@ -10,6 +10,7 @@ from tensorflow.contrib import learn
 
 class WuziqiQValueNet(interfaces.IEvaluator):
     def __init__(self, board_size, learning_rate, lbd):
+
         self.board_size = board_size
         self.learning_rate = learning_rate
         # Input Layer
@@ -19,54 +20,97 @@ class WuziqiQValueNet(interfaces.IEvaluator):
         self.y = tf.placeholder("float")
         self.lbd = lbd
         self.r = 0.05
-        self.kernel_size = [5, 5]
+        self.kernel_size1 = [2, 2]
+        self.kernel_size2 = [2, 2]
+        self.kernel_size3 = [2, 2]
         self.pool_size = [2, 2]
+        self.training_epics = 300
 
         input_layer = tf.reshape(
             self.state_actions, [-1, board_size[0], board_size[1], 2],
             name="input_layer")
         conv1 = tf.layers.conv2d(
-            # name="conv1",
             inputs=input_layer,
-            filters=16,
-            kernel_size=self.kernel_size,
-            padding="same",
+            filters=96,
+            kernel_size=self.kernel_size1,
+            # padding="same",
             activation=tf.nn.relu)
 
+        # pool1 = tf.layers.max_pooling2d(
+        #     inputs=conv1,
+        #     pool_size=self.pool_size,
+        #     strides=1)
+
         conv2 = tf.layers.conv2d(
-            # name="conv2",
             inputs=conv1,
-            filters=32,
-            kernel_size=self.kernel_size,
-            padding="same",
+            filters=128,
+            kernel_size=self.kernel_size1,
+            # padding="same",
             activation=tf.nn.relu)
-        # self.pool1 = tf.layers.max_pooling2d(inputs=self.conv1, pool_size=[2, 2], strides=2)
+
+        # pool2 = tf.layers.max_pooling2d(
+        #     inputs=conv2,
+        #     pool_size=self.pool_size,
+        #     strides=1)
+
         conv3 = tf.layers.conv2d(
-            # name="conv3",
             inputs=conv2,
-            filters=64,
-            kernel_size=self.kernel_size,
+            filters=128,
+            kernel_size=self.kernel_size1,
             # padding="same",
             activation=tf.nn.relu)
 
         pool3 = tf.layers.max_pooling2d(
-            # name="pool2",
             inputs=conv3,
             pool_size=self.pool_size,
             strides=1)
 
-        flat_size = (board_size[0] - (self.kernel_size[0] - 1) - (self.pool_size[0] - 1)) * \
-                    (board_size[1] - (self.kernel_size[1] - 1) - (self.pool_size[1] - 1)) * 64
-        pool_flat = tf.reshape(pool3, [-1, flat_size])
-        dense = tf.layers.dense(
-            # name="dense",
-            inputs=pool_flat, units=4096, activation=tf.nn.relu)
+        conv4 = tf.layers.conv2d(
+            inputs=pool3,
+            filters=256,
+            kernel_size=self.kernel_size2,
+            # padding="same",
+            activation=tf.nn.relu)
+
+        conv5 = tf.layers.conv2d(
+            inputs=conv4,
+            filters=256,
+            kernel_size=self.kernel_size2,
+            # padding="same",
+            activation=tf.nn.relu)
+
+        pool5 = tf.layers.max_pooling2d(
+            inputs=conv5,
+            pool_size=self.pool_size,
+            strides=1)
+
+        conv6 = tf.layers.conv2d(
+            inputs=pool5,
+            filters=512,
+            kernel_size=self.kernel_size3,
+            # padding="same",
+            activation=tf.nn.relu)
+
+        conv7 = tf.layers.conv2d(
+            inputs=conv6,
+            filters=512,
+            kernel_size=self.kernel_size3,
+            # padding="same",
+            activation=tf.nn.relu)
+
+        # w = board_size[0] - ((self.kernel_size1[0] - 1) + (self.kernel_size2[0] - 1)*1 + (self.pool_size[0] - 1)*3)
+        # h = board_size[1] - ((self.kernel_size1[1] - 1) + (self.kernel_size2[1] - 1)*1 + (self.pool_size[1] - 1)*3)
+        #
+        # flat_size = w * h * 512
+        flat_size = 2048
+        pool_flat = tf.reshape(conv7, [-1, flat_size])
         dropout = tf.layers.dropout(
-            # name="dropout",
-            inputs=dense, rate=0.5, training=self.mode == learn.ModeKeys.TRAIN)
+            inputs=pool_flat, rate=0.1, training=self.mode == learn.ModeKeys.TRAIN)
+        dense = tf.layers.dense(
+            inputs=dropout, units=2048, activation=tf.nn.relu)
+
         self.pred = tf.layers.dense(
-            # name="pred",
-            inputs=dropout, units=1)
+            inputs=dense, units=1)
 
         # Mean squared error
         # loss = tf.reduce_sum(tf.pow(self.pred - self.y, 2)) / (2 * batch_size)
@@ -104,15 +148,22 @@ class WuziqiQValueNet(interfaces.IEvaluator):
 
     def train(self, data):
         state_actions, y = self.build_training_data2(data)
-        epic = 100
+
+        def eval_epic(epic):
+            session = data[0]
+            state1, action1, _ = session[-2]
+            # state2, action2, _ = session[-3]
+            print("epic %d: %f" % (epic, self.evaluate(state1, action1)))
+            self.evaluate(state1, action1)
         loss = 0
-        for i in range(epic):
+        for i in range(self.training_epics):
             loss, _ = self.sess.run([self.loss, self.optimizer], {self.state_actions: state_actions,
                                                                   self.y: y,
                                                                   self.mode: learn.ModeKeys.TRAIN})
             if i == 0:
                 print("qvalue losses:", loss)
-
+            if (i+1) % 50 == 0:
+                eval_epic(i)
         print("qvalue losses:", loss)
 
     def build_training_data(self, data):
@@ -142,15 +193,11 @@ class WuziqiQValueNet(interfaces.IEvaluator):
             if end_action.val != 0:
                 end_value = self.evaluate(end_state, end_action)
 
-            for index in range(steps - 1, 0, -1):
+            for index in range(steps - 2, 0, -1):
                 state, action, reward = session[index]
                 inputs.append(self.build_state_action(state, action))
-                if reward == 1:
-                    end_value = 1
-                    y.append(end_value)
-                else:
-                    end_value = reward + self.lbd * end_value
-                    y.append(end_value)
+                end_value = reward + self.lbd * end_value
+                y.append(end_value)
         return inputs, y
 
     def save(self, save_path):
@@ -177,6 +224,7 @@ class WuziqiPolicyNet(interfaces.IPolicy):
         self.r = 0.05
         self.kernel_size = [5, 5]
         self.pool_size = [2, 2]
+        self.training_epics = 50
 
         input_layer = tf.reshape(
             self.state, [-1, board_size[0], board_size[1], 1], name="policy_input_layer")
@@ -214,10 +262,10 @@ class WuziqiPolicyNet(interfaces.IPolicy):
         pool_flat = tf.reshape(pool3, [-1, flat_size])
         dense = tf.layers.dense(
             # name="policy_dense",
-            inputs=pool_flat, units=4096, activation=tf.nn.relu)
+            inputs=pool_flat, units=2048, activation=tf.nn.relu)
         dropout = tf.layers.dropout(
             # name="policy_dropout",
-            inputs=dense, rate=0.5, training=self.mode == learn.ModeKeys.TRAIN)
+            inputs=dense, rate=0.1, training=self.mode == learn.ModeKeys.TRAIN)
         self.pred = tf.layers.dense(
             # name="policy_pred",
             inputs=dropout, units=board_size[0] * board_size[1])
@@ -278,10 +326,8 @@ class WuziqiPolicyNet(interfaces.IPolicy):
             out[action.x, action.y] = 1
             y[i, :] = np.reshape(out, (self.board_size[0] * self.board_size[1]))
 
-        epic = 100
         loss = 0
-
-        for i in range(epic):
+        for i in range(self.training_epics):
             loss, _ = self.sess.run([self.loss, self.optimizer], {self.state: states,
                                                                   self.y: y,
                                                                   self.mode: learn.ModeKeys.TRAIN})
