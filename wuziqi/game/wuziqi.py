@@ -12,6 +12,11 @@ class WuziqiAction(object):
         return WuziqiAction(self.x, self.y, self.val * -1)
 
 
+class Position(object):
+    def __init__(self, x, y):
+        self.x = x
+        self.y = y
+
 class WuziqiGame(game.interfaces.IEnvironment):
     SIDES = [-1, 1]
     WINNING_SIZE = 5
@@ -123,3 +128,32 @@ class WuziqiGame(game.interfaces.IEnvironment):
         cloned.state = self.state * -1
         cloned.last_action = self.last_action.reverse()
         return cloned
+
+    def neighbor(self, pos: Position, available_only: bool):
+        def get_options(current, boundary):
+            if current == 0:
+                return [0, 1]
+            elif current == (boundary - 1):
+                return [-1, 0]
+            else:
+                return [-1, 0, 1]
+
+        def is_available(x, y):
+            return self.state[x, y] == 0
+
+        x_options = get_options(pos.x, self.board_size[0])
+        y_options = get_options(pos.y, self.board_size[1])
+
+        positions = []
+        for dx in x_options:
+            x = pos.x + dx
+            for dy in y_options:
+                y = pos.y + dy
+                if x == pos.x and y == pos.y:
+                    continue
+                elif available_only:
+                    if is_available(x, y):
+                        positions.append(Position(x, y))
+                else:
+                    positions.append(Position(x, y))
+        return positions

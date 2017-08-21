@@ -153,7 +153,7 @@ class WuziqiQValueNet(interfaces.IEvaluator):
             session = data[0]
             state1, action1, _ = session[-2]
             # state2, action2, _ = session[-3]
-            print("epic %d: %f" % (epic, self.evaluate(state1, action1)))
+            print("epic %d: %f %f" % (epic, self.evaluate(state1, action1), y[0]))
             self.evaluate(state1, action1)
         loss = 0
         for i in range(self.training_epics):
@@ -162,7 +162,7 @@ class WuziqiQValueNet(interfaces.IEvaluator):
                                                                   self.mode: learn.ModeKeys.TRAIN})
             if i == 0:
                 print("qvalue losses:", loss)
-            if (i+1) % 50 == 0:
+            if (i + 1) % 25 == 0:
                 eval_epic(i)
         print("qvalue losses:", loss)
 

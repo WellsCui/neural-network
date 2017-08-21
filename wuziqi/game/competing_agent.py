@@ -30,10 +30,12 @@ class CompetingAgent(interfaces.IAgent):
     def act(self, environment: interfaces.IEnvironment):
         state = environment.get_state().copy()
         # select_count = int(self.think_width * self.greedy_rate)
-        select_count = 1
-        actions = self.policy.suggest(state, self.side, select_count)
-        available_actions = self.get_available_actions(environment, self.side)
-        actions += random.sample(available_actions, self.search_width - select_count)
+        # select_count = 1
+        # actions = self.policy.suggest(state, self.side, select_count)
+        # available_actions = self.get_available_actions(environment, self.side)
+        # actions += random.sample(available_actions, self.search_width - select_count)
+        policy_actions, actions = self.get_candidate_actions(environment)
+        select_count = len(policy_actions)
         rehearsals = []
 
         for act in actions:
@@ -90,11 +92,11 @@ class CompetingAgent(interfaces.IAgent):
             if self.train_sessions_with_end_only:
                 if final_state == 1:
                     self.value_net_training_data.append(h1)
-                elif final_state == -1:
-                    self.value_net_training_data.append(h2)
+                # elif final_state == -1:
+                #     self.value_net_training_data.append(h2)
             else:
                 self.value_net_training_data.append(h1)
-                self.value_net_training_data.append(h2)
+                # self.value_net_training_data.append(h2)
 
         if len(self.value_net_training_data) >= self.value_net_trainning_size:
             self.qnet.train(self.value_net_training_data)
@@ -137,12 +139,37 @@ class CompetingAgent(interfaces.IAgent):
             actions.append(wuziqi.WuziqiAction(points[0][i], points[1][i], side))
         return actions
 
-    def get_candidate_actions(environment: interfaces.IEnvironment):
-        points = environment.get_available_points()
-        actions = []
-        for i in range(len(points[0])):
-            actions.append(wuziqi.WuziqiAction(points[0][i], points[1][i], side))
-        return actions
+    def get_candidate_actions(self, environment: interfaces.IEnvironment):
+
+        def pos_to_action(pos: wuziqi.Position):
+            return wuziqi.WuziqiAction(pos.x, pos.y, self.side)
+
+        def contains(ps, p):
+            for item in ps:
+                if item.x == p.x and item.y == p.y:
+                    return True
+            return False
+
+        def merge(p1, p2):
+            return p1 + [p for p in p2 if not contains(p1, p)]
+        # select_count = int(self.think_width * self.greedy_rate)
+
+        select_count = 1
+        policy_actions = self.policy.suggest(environment.get_state(), self.side, select_count)
+        if self.last_action is None:
+            last_action_neighbors = []
+        else:
+            last_action_neighbors = environment.neighbor(wuziqi.Position(self.last_action.x, self.last_action.y), True)
+        if self.last_action is None:
+            opponent_last_action_neighbors = []
+        else:
+            opponent_last_action_neighbors = environment.neighbor(wuziqi.Position(environment.last_action.x, environment.last_action.y), True)
+
+        neighbor_actions = [pos_to_action(pos) for pos in merge(last_action_neighbors, opponent_last_action_neighbors)]
+        actions = merge(policy_actions, neighbor_actions)
+        available_actions = [a for a in self. get_available_actions(environment, self.side) if not contains(actions, a)]
+        actions += random.sample(available_actions, self.search_width - len(actions))
+        return policy_actions, actions
 
 
     def rehearsal(self, environment: interfaces.IEnvironment, action, opponent_policy: interfaces.IPolicy, steps):
