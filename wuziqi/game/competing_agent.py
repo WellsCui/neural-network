@@ -10,6 +10,7 @@ class CompetingAgent(interfaces.IAgent):
     def __init__(self, name, board_size, learning_rate, side, lbd):
         self.name = name
         self.side = side
+        self.learning_rate = learning_rate
         self.policy = qlearning.WuziqiPolicyNet(board_size, learning_rate, lbd)
         self.qnet = qlearning.WuziqiQValueNet(board_size, learning_rate, lbd)
         self.mode = "online_learning."
@@ -87,19 +88,22 @@ class CompetingAgent(interfaces.IAgent):
         self.policy.apply_gradient(current_state, current_action, corrected_qnet_value)
 
     def learn_from_rehearsal(self, rehearsals, best_choice):
+        print("current learning rate: ", self.learning_rate)
 
         for h1, h2, final_state in rehearsals:
             if self.train_sessions_with_end_only:
                 if final_state == 1:
                     self.value_net_training_data.append(h1)
-                # elif final_state == -1:
-                #     self.value_net_training_data.append(h2)
+                elif final_state == -1:
+                    self.value_net_training_data.append(h2)
             else:
                 self.value_net_training_data.append(h1)
-                # self.value_net_training_data.append(h2)
+                self.value_net_training_data.append(h2)
 
         if len(self.value_net_training_data) >= self.value_net_trainning_size:
-            self.qnet.train(self.value_net_training_data)
+            self.qnet.train(self.learning_rate, self.value_net_training_data)
+            if self.learning_rate> 0.0005:
+                self.learning_rate *= 0.5
             self.value_net_training_data = []
             return True
 

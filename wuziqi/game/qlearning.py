@@ -24,7 +24,7 @@ class WuziqiQValueNet(interfaces.IEvaluator):
         self.kernel_size2 = [2, 2]
         self.kernel_size3 = [2, 2]
         self.pool_size = [2, 2]
-        self.training_epics = 300
+        self.training_epics = 100
 
         input_layer = tf.reshape(
             self.state_actions, [-1, board_size[0], board_size[1], 2],
@@ -146,18 +146,21 @@ class WuziqiQValueNet(interfaces.IEvaluator):
                                 self.y: r + self.lbd * self.evaluate(next_state, next_action),
                                 self.mode: learn.ModeKeys.TRAIN})
 
-    def train(self, data):
+    def train(self, learning_rate, data):
         state_actions, y = self.build_training_data2(data)
 
         def eval_epic(epic):
-            session = data[0]
-            state1, action1, _ = session[-2]
-            # state2, action2, _ = session[-3]
-            print("epic %d: %f %f" % (epic, self.evaluate(state1, action1), y[0]))
-            self.evaluate(state1, action1)
+            print("epic %d: ", epic)
+            print()
+            vals = self.sess.run(self.pred, {self.state_actions: state_actions[0:20],
+                                             self.mode: learn.ModeKeys.EVAL})
+            result = np.append(vals, np.reshape(y[0:20], vals.shape), axis=1)
+            print(result)
+
         loss = 0
+        optimizer = tf.train.GradientDescentOptimizer(learning_rate).minimize(self.loss)
         for i in range(self.training_epics):
-            loss, _ = self.sess.run([self.loss, self.optimizer], {self.state_actions: state_actions,
+            loss, _ = self.sess.run([self.loss, optimizer], {self.state_actions: state_actions,
                                                                   self.y: y,
                                                                   self.mode: learn.ModeKeys.TRAIN})
             if i == 0:

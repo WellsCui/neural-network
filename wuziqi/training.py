@@ -175,8 +175,8 @@ def run_actor_critic_agent(times):
 
 def run_competing_agent(times, train_all_after, restored):
     board_size = (11, 11)
-    player1 = competing_agent.CompetingAgent("player1", board_size, 0.005, 1, 0.90)
-    player2 = competing_agent.CompetingAgent("player2", board_size, 0.005, -1, 0.90)
+    player1 = competing_agent.CompetingAgent("player1", board_size, 0.005, 1, 0.98)
+    player2 = competing_agent.CompetingAgent("player2", board_size, 0.005, -1, 0.98)
 
     # if restored:
     #     player1.restore("/tmp/player1")
