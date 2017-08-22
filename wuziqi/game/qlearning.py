@@ -8,7 +8,7 @@ import tensorflow as tf
 from tensorflow.contrib import learn
 
 
-class WuziqiQValueNet(interfaces.IEvaluator):
+class WuziqiQValueNet(interfaces.IActionEvaluator):
     def __init__(self, board_size, learning_rate, lbd):
 
         self.board_size = board_size
@@ -118,7 +118,7 @@ class WuziqiQValueNet(interfaces.IEvaluator):
         self.loss = tf.losses.mean_squared_error(self.y, self.pred)
         # Gradient descent
 
-        self.optimizer = tf.train.GradientDescentOptimizer(self.learning_rate).minimize(self.loss)
+        # self.optimizer = tf.train.GradientDescentOptimizer(self.learning_rate).minimize(self.loss)
         init = tf.global_variables_initializer()
 
         self.trainable_variables = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='QValueNet')
@@ -130,6 +130,14 @@ class WuziqiQValueNet(interfaces.IEvaluator):
     def evaluate(self, state, action):
         return self.sess.run(self.pred, {self.state_actions: self.build_state_action(state, action),
                                          self.mode: learn.ModeKeys.EVAL})
+
+    def suggest(self, state, candidate_actions):
+        evaluate_data = [self.build_state_action(state, action) for action in candidate_actions]
+
+        results = self.sess.run(self.pred, {self.state_actions: evaluate_data,
+                                            self.mode: learn.ModeKeys.EVAL})
+        max_index = np.argmax(results)
+        return candidate_actions[max_index]
 
     def build_state_action(self, state, action):
         action_data = np.zeros(self.board_size)
@@ -148,26 +156,22 @@ class WuziqiQValueNet(interfaces.IEvaluator):
 
     def train(self, learning_rate, data):
         state_actions, y = self.build_training_data2(data)
+        print("Value-Net learning rate: ", learning_rate)
 
-        def eval_epic(epic):
-            print("epic %d: ", epic)
-            print()
+        def eval_epic(epic, loss):
+            print("epic %d: %f " % (epic, loss))
             vals = self.sess.run(self.pred, {self.state_actions: state_actions[0:20],
                                              self.mode: learn.ModeKeys.EVAL})
             result = np.append(vals, np.reshape(y[0:20], vals.shape), axis=1)
             print(result)
 
-        loss = 0
         optimizer = tf.train.GradientDescentOptimizer(learning_rate).minimize(self.loss)
         for i in range(self.training_epics):
             loss, _ = self.sess.run([self.loss, optimizer], {self.state_actions: state_actions,
-                                                                  self.y: y,
-                                                                  self.mode: learn.ModeKeys.TRAIN})
-            if i == 0:
-                print("qvalue losses:", loss)
-            if (i + 1) % 25 == 0:
-                eval_epic(i)
-        print("qvalue losses:", loss)
+                                                             self.y: y,
+                                                             self.mode: learn.ModeKeys.TRAIN})
+            if (i + 1) % 25 == 0 or i == 0:
+                eval_epic(i, loss)
 
     def build_training_data(self, data):
         inputs = []
@@ -227,7 +231,7 @@ class WuziqiPolicyNet(interfaces.IPolicy):
         self.r = 0.05
         self.kernel_size = [5, 5]
         self.pool_size = [2, 2]
-        self.training_epics = 50
+        self.training_epics = 100
 
         input_layer = tf.reshape(
             self.state, [-1, board_size[0], board_size[1], 1], name="policy_input_layer")
@@ -263,12 +267,13 @@ class WuziqiPolicyNet(interfaces.IPolicy):
         flat_size = (board_size[0] - (self.kernel_size[0] - 1) - (self.pool_size[0] - 1)) * \
                     (board_size[1] - (self.kernel_size[1] - 1) - (self.pool_size[1] - 1)) * 64
         pool_flat = tf.reshape(pool3, [-1, flat_size])
-        dense = tf.layers.dense(
-            # name="policy_dense",
-            inputs=pool_flat, units=2048, activation=tf.nn.relu)
         dropout = tf.layers.dropout(
             # name="policy_dropout",
-            inputs=dense, rate=0.1, training=self.mode == learn.ModeKeys.TRAIN)
+            inputs=pool_flat, rate=0.1, training=self.mode == learn.ModeKeys.TRAIN)
+        dense = tf.layers.dense(
+            # name="policy_dense",
+            inputs=dropout, units=2048, activation=tf.nn.relu)
+
         self.pred = tf.layers.dense(
             # name="policy_pred",
             inputs=dropout, units=board_size[0] * board_size[1])
@@ -282,7 +287,7 @@ class WuziqiPolicyNet(interfaces.IPolicy):
             tf.nn.softmax_cross_entropy_with_logits(labels=self.y, logits=self.pred))
         # Gradient descent
 
-        self.optimizer = tf.train.GradientDescentOptimizer(self.learning_rate).minimize(self.loss)
+        # self.optimizer = tf.train.GradientDescentOptimizer(self.learning_rate).minimize(self.loss)
         init = tf.global_variables_initializer()
 
         # print("trainable_variables:", tf.trainable_variables())
@@ -318,7 +323,9 @@ class WuziqiPolicyNet(interfaces.IPolicy):
                                 self.y: y,
                                 self.mode: learn.ModeKeys.TRAIN})
 
-    def train(self, data):
+    def train(self, learning_rate, data):
+        print("Policy-Net learning rate: ", learning_rate)
+        optimizer = tf.train.GradientDescentOptimizer(learning_rate).minimize(self.loss)
         states = [s for s, _ in data]
         state_shape = np.shape(states)
         y = np.zeros((state_shape[0], self.board_size[0] * self.board_size[1]))
@@ -329,14 +336,12 @@ class WuziqiPolicyNet(interfaces.IPolicy):
             out[action.x, action.y] = 1
             y[i, :] = np.reshape(out, (self.board_size[0] * self.board_size[1]))
 
-        loss = 0
         for i in range(self.training_epics):
-            loss, _ = self.sess.run([self.loss, self.optimizer], {self.state: states,
-                                                                  self.y: y,
-                                                                  self.mode: learn.ModeKeys.TRAIN})
-            if i == 0:
-                print("policy losses:", loss)
-        print("policy losses:", loss)
+            loss, _ = self.sess.run([self.loss, optimizer], {self.state: states,
+                                                             self.y: y,
+                                                             self.mode: learn.ModeKeys.TRAIN})
+            if (i + 1) % 25 == 0 or i == 0:
+                print("epic %d policy losses: %f" % (i, loss))
 
     def save(self, save_path):
         saver = tf.train.Saver()

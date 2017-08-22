@@ -23,6 +23,10 @@ class IEvaluator(metaclass=ABCMeta):
     def evaluate(self, environment: IEnvironment):
         pass
 
+class IActionEvaluator(metaclass=ABCMeta):
+    @abstractmethod
+    def evaluate(self, environment: IEnvironment, action):
+        pass
 
 class IPolicy(metaclass=ABCMeta):
     @abstractmethod

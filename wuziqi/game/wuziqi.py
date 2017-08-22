@@ -37,6 +37,13 @@ class WuziqiGame(game.interfaces.IEnvironment):
     def get_available_points(self):
         return np.where(self.state == 0)
 
+    def get_available_actions(self, side):
+        points = self.get_available_points()
+        actions = []
+        for i in range(len(points[0])):
+            actions.append(WuziqiAction(points[0][i], points[1][i], side))
+        return actions
+
     @staticmethod
     def eval_row(row):
         last_val = 0
@@ -129,26 +136,25 @@ class WuziqiGame(game.interfaces.IEnvironment):
         cloned.last_action = self.last_action.reverse()
         return cloned
 
-    def neighbor(self, pos: Position, available_only: bool):
-        def get_options(current, boundary):
-            if current == 0:
-                return [0, 1]
-            elif current == (boundary - 1):
-                return [-1, 0]
-            else:
-                return [-1, 0, 1]
+    def neighbor(self, pos: Position, radius, available_only: bool):
+        def get_range(current, low, high):
+            start = current - radius + 1
+            if start < low:
+                start = low
+            end = current + radius
+            if end > high:
+                end = high
+            return range(start, end)
 
         def is_available(x, y):
             return self.state[x, y] == 0
 
-        x_options = get_options(pos.x, self.board_size[0])
-        y_options = get_options(pos.y, self.board_size[1])
+        x_options = get_range(pos.x, 0, self.board_size[0])
+        y_options = get_range(pos.y, 0, self.board_size[1])
 
         positions = []
-        for dx in x_options:
-            x = pos.x + dx
-            for dy in y_options:
-                y = pos.y + dy
+        for x in x_options:
+            for y in y_options:
                 if x == pos.x and y == pos.y:
                     continue
                 elif available_only:
