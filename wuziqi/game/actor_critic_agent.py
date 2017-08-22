@@ -1,4 +1,4 @@
-import game.qlearning as qlearning
+import game.wuziqi_value_net as qlearning
 import game.interfaces as interfaces
 
 class ActorCriticAgent(interfaces.IAgent):

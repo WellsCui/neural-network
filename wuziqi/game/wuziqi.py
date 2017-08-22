@@ -114,7 +114,7 @@ class WuziqiGame(game.interfaces.IEnvironment):
                     if self.last_action.val == 1:
                         row.append('#')
                     elif self.last_action.val == -1:
-                        row.append('%')
+                        row.append('H')
                 elif state == 1:
                     row.append('X')
                 elif state == -1:

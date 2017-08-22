@@ -1,10 +1,11 @@
-import game.qlearning as qlearning
+import random
 import numpy as np
 import game.interfaces as interfaces
 import game.wuziqi as wuziqi
 import game.utils
-import random
 
+import game.wuziqi_value_net
+import game.wuziqi_policy_net
 
 class CompetingAgent(interfaces.IAgent):
     def __init__(self, name, board_size, initial_learning_rate, side, lbd):
@@ -14,8 +15,8 @@ class CompetingAgent(interfaces.IAgent):
         self.policy_net_learning_rate = initial_learning_rate
         self.minimum_learning_rate = 0.0002
         self.learning_rate_dacade_rate = 0.5
-        self.policy = qlearning.WuziqiPolicyNet(board_size, initial_learning_rate, lbd)
-        self.qnet = qlearning.WuziqiQValueNet(board_size, initial_learning_rate, lbd)
+        self.policy = game.wuziqi_policy_net.WuziqiPolicyNet(board_size, initial_learning_rate, lbd)
+        self.qnet = game.wuziqi_value_net.WuziqiQValueNet(board_size, initial_learning_rate, lbd)
         self.mode = "online_learning."
         self.lbd = lbd
         self.search_depth = 10
@@ -23,13 +24,14 @@ class CompetingAgent(interfaces.IAgent):
         self.policy_training_data = []
         self.value_net_training_data = []
         self.value_net_trainning_size = 50
-        self.policy_trainning_size = 100
+        self.policy_trainning_size = 50
         self.epslon = 0.001
         self.greedy_rate = 0.5
         self.board_size = board_size
         self.is_greedy = False
         self.train_sessions_with_end_only = True
         self.last_action = None
+        self.qnet_error = 1
 
     def act(self, environment: interfaces.IEnvironment):
         state = environment.get_state().copy()
@@ -95,20 +97,16 @@ class CompetingAgent(interfaces.IAgent):
                 self.value_net_training_data.append(h2)
 
         if len(self.value_net_training_data) >= self.value_net_trainning_size:
-            self.qnet.train(self.value_net_learning_rate, self.value_net_training_data)
-            if self.value_net_learning_rate > self.minimum_learning_rate:
+            error = self.qnet.train(self.value_net_learning_rate, self.value_net_training_data)
+            if error < 0.01:
+                self.train_sessions_with_end_only = False
+
+            if error < 0.1 * self.qnet_error and self.value_net_learning_rate > self.minimum_learning_rate:
                 self.value_net_learning_rate *= self.learning_rate_dacade_rate
+                self.qnet_error = error
             self.value_net_training_data = []
 
-        # h1, h2, final_state = rehearsals[best_choice]
-        # state, best_action, _ = h1[0]
-        # if self.train_sessions_with_end_only:
-        #     if final_state == 1:
-        #         # print("add policy training record:", len(self.policy_training_data))
-        #         self.policy_training_data.append([state, best_action])
-        # else:
-        #     self.policy_training_data.append([state, best_action])
-
+        print("add policy training record:", len(self.policy_training_data))
         self.policy_training_data.append([state, best_action])
 
         if len(self.policy_training_data) == self.policy_trainning_size:
@@ -126,7 +124,6 @@ class CompetingAgent(interfaces.IAgent):
             if len(opponent_history) > 0:
                 opponent_state, opponent_action, opponent_reward = opponent_history[-1]
                 result -= self.qnet.evaluate(opponent_state, opponent_action)
-                result = result[0][0]
         else:
             result = final_state
         return result * (self.lbd ** (len(history) - 2))
@@ -155,7 +152,8 @@ class CompetingAgent(interfaces.IAgent):
         # select_count = int(self.think_width * self.greedy_rate)
 
         select_count = 1
-        policy_actions = self.policy.suggest(environment.get_state(), self.side, select_count)
+        policy_actions = merge(self.policy.suggest(environment.get_state(), self.side, select_count),
+                               self.policy.suggest(environment.reverse().get_state(), self.side, select_count))
 
         if last_action is None:
             direct_neighbors_1 = []

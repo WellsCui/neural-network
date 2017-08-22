@@ -175,9 +175,11 @@ def run_actor_critic_agent(times):
 
 def run_competing_agent(times, train_all_after, restored):
     board_size = (11, 11)
-    player1 = competing_agent.CompetingAgent("player1", board_size, 0.005, 1, 0.98)
-    player2 = competing_agent.CompetingAgent("player2", board_size, 0.005, -1, 0.98)
+    player1 = competing_agent.CompetingAgent("player1", board_size, 0.005, 1, 0.985)
+    player2 = competing_agent.CompetingAgent("player2", board_size, 0.005, -1, 0.985)
 
+    player1.is_greedy = True
+    player2.is_greedy = True
     # if restored:
     #     player1.restore("/tmp/player1")
     #     player1.restore("/tmp/player2")
@@ -204,8 +206,9 @@ def run_competing_agent(times, train_all_after, restored):
         else:
             first_player = player2
             second_player = player1
-        player1.is_greedy = i % 11 == 0
-        player2.is_greedy = i % 13 == 0
+        # player1.is_greedy = i % 11 == 0
+        # player2.is_greedy = i % 13 == 0
+
         print("player1 greedy: ", player1.is_greedy)
         print("player2 greedy: ", player2.is_greedy)
         while True:
