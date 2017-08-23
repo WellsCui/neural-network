@@ -19,13 +19,13 @@ class CompetingAgent(interfaces.IAgent):
         self.qnet = game.wuziqi_value_net.WuziqiQValueNet(board_size, initial_learning_rate, lbd)
         self.mode = "online_learning."
         self.lbd = lbd
-        self.search_depth = 10
+        self.search_depth = 20
         self.search_width = 20
         self.policy_training_data = []
         self.value_net_training_data = []
-        self.value_net_trainning_size = 50
-        self.policy_trainning_size = 50
-        self.epslon = 0.001
+        self.value_net_training_size = 50
+        self.policy_training_size = 2000
+        self.epsilon = 0.001
         self.greedy_rate = 0.5
         self.board_size = board_size
         self.is_greedy = False
@@ -60,13 +60,13 @@ class CompetingAgent(interfaces.IAgent):
                action.x, action.y,
                self.qnet.evaluate(state, action),
                action == best_action))
-        self.learn_from_rehearsal(rehearsals+reversed_rehearsals, state, best_action)
+        self.learn_from_rehearsal(rehearsals+reversed_rehearsals)
         self.last_action = action
         environment.update(self.last_action)
         return self.last_action
 
     def increase_greedy(self):
-        self.greedy_rate += (1 - self.greedy_rate) * self.epslon
+        self.greedy_rate += (1 - self.greedy_rate) * self.epsilon
         print("greedy : ", self.greedy_rate)
 
     def learn(self, current_state, current_action, r, next_state, next_action):
@@ -85,7 +85,28 @@ class CompetingAgent(interfaces.IAgent):
         instance = rs[index]
         return instance[0][0][1]
 
-    def learn_from_rehearsal(self, rehearsals, state, best_action):
+    def learn_from_rehearsal(self, rehearsals):
+        self.train_value_net(rehearsals)
+        self.train_policy_net(rehearsals)
+
+    def train_policy_net(self, rehearsals):
+        for h1, h2, final_state in rehearsals:
+            if final_state == 1:
+                state, action, _ = h1[-2]
+                self.policy_training_data.append([state, action])
+            elif final_state == -1:
+                state, action, _ = h2[-2]
+                self.policy_training_data.append([state, action])
+
+        print("policy_training_data:", len(self.policy_training_data))
+
+        if len(self.policy_training_data) > self.policy_training_size:
+            self.policy.train(self.policy_net_learning_rate, self.policy_training_data)
+            if self.policy_net_learning_rate > self.minimum_learning_rate:
+                self.policy_net_learning_rate *= self.learning_rate_dacade_rate
+            self.policy_training_data = []
+
+    def train_value_net(self, rehearsals):
         for h1, h2, final_state in rehearsals:
             if self.train_sessions_with_end_only:
                 if final_state == 1:
@@ -96,24 +117,15 @@ class CompetingAgent(interfaces.IAgent):
                 self.value_net_training_data.append(h1)
                 self.value_net_training_data.append(h2)
 
-        if len(self.value_net_training_data) >= self.value_net_trainning_size:
+        if len(self.value_net_training_data) >= self.value_net_training_size:
             error = self.qnet.train(self.value_net_learning_rate, self.value_net_training_data)
             if error < 0.01:
                 self.train_sessions_with_end_only = False
 
-            if error < 0.1 * self.qnet_error and self.value_net_learning_rate > self.minimum_learning_rate:
+            if error < self.learning_rate_dacade_rate * self.qnet_error and self.value_net_learning_rate > self.minimum_learning_rate:
                 self.value_net_learning_rate *= self.learning_rate_dacade_rate
-                self.qnet_error = error
+            self.qnet_error = error
             self.value_net_training_data = []
-
-        print("add policy training record:", len(self.policy_training_data))
-        self.policy_training_data.append([state, best_action])
-
-        if len(self.policy_training_data) == self.policy_trainning_size:
-            self.policy.train(self.policy_net_learning_rate, self.policy_training_data)
-            if self.policy_net_learning_rate > self.minimum_learning_rate:
-                self.policy_net_learning_rate *= self.learning_rate_dacade_rate
-            self.policy_training_data = []
 
     def evaluate_rehearsal(self, rehearsal):
         history, opponent_history, final_state = rehearsal

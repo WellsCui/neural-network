@@ -105,7 +105,7 @@ class WuziqiQValueNet(interfaces.IActionEvaluator):
         flat_size = 2048
         pool_flat = tf.reshape(conv7, [-1, flat_size])
         dropout = tf.layers.dropout(
-            inputs=pool_flat, rate=0.1, training=self.mode == learn.ModeKeys.TRAIN)
+            inputs=pool_flat, rate=0.5, training=self.mode == learn.ModeKeys.TRAIN)
         dense = tf.layers.dense(
             inputs=dropout, units=2048, activation=tf.nn.relu)
 
@@ -156,6 +156,8 @@ class WuziqiQValueNet(interfaces.IActionEvaluator):
 
     def train(self, learning_rate, data):
         state_actions, y = self.build_td_training_data(data)
+        if len(y) == 0:
+            return 0
         print("Value-Net learning rate: ", learning_rate)
 
         def eval_epic(epic, loss):
@@ -165,25 +167,22 @@ class WuziqiQValueNet(interfaces.IActionEvaluator):
             result = np.append(vals, np.reshape(y[0:20], vals.shape), axis=1)
             print(result)
 
-        loss = self.sess.run([self.loss], {self.state_actions: state_actions,
-                                           self.y: y,
-                                           self.mode: learn.ModeKeys.TRAIN})
+        loss = self.sess.run(self.loss, {self.state_actions: state_actions,
+                                         self.y: y,
+                                         self.mode: learn.ModeKeys.TRAIN})
 
-        # if loss[0] < 0.01:
-        #     state_actions, y = self.build_td_0_training_data(data)
-
-        if loss[0] < 0.0003:
-            return loss
+        if loss > 0.01:
+            learning_rate *= 2
 
         optimizer = tf.train.GradientDescentOptimizer(learning_rate).minimize(self.loss)
         for i in range(self.training_epics):
-            loss, _ = self.sess.run([self.loss, optimizer], {self.state_actions: state_actions,
-                                               self.y: y,
-                                               self.mode: learn.ModeKeys.TRAIN})
+            loss, _ = self.sess.run([self.loss, optimizer],
+                                    {self.state_actions: state_actions,
+                                     self.y: y,
+                                     self.mode: learn.ModeKeys.TRAIN})
             if (i + 1) % 25 == 0 or i == 0:
                 eval_epic(i, loss)
-            if loss < 0.0003:
-                break
+
         return loss
 
     def build_td_0_training_data(self, data):
@@ -225,11 +224,17 @@ class WuziqiQValueNet(interfaces.IActionEvaluator):
             if end_value < 0.2 and session[-2][2] == 0:
                 continue
 
+            session_inputs = np.array([self.build_state_action(state, action) for state, action, _ in session])
+            session_y = self.lbd * self.sess.run(self.pred, {self.state_actions: session_inputs[1:],
+                                                             self.mode: learn.ModeKeys.EVAL})
+
             for index in range(steps - 2, 0, -1):
                 state, action, reward = session[index]
-                inputs.append(self.build_state_action(state, action))
                 end_value = reward + self.lbd * end_value
-                y.append(end_value)
+                if end_value * self.lbd > session_y[index]:
+                    inputs.append(self.build_state_action(state, action))
+                    y.append(end_value)
+        print("Training count:", len(y))
         return inputs, y
 
     def save(self, save_path):

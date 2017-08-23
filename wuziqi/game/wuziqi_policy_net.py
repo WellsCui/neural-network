@@ -104,15 +104,15 @@ class WuziqiPolicyNet(interfaces.IPolicy):
         dense = tf.layers.dense(
             inputs=dropout, units=2048, activation=tf.nn.relu)
 
-        self.pred = tf.layers.dense(inputs=dense, units=board_size[0] * board_size[1])
-        # self.pred = tf.layers.dense(name="pred", inputs=dense, units=board_size[0] * board_size[1])
-        # self.action = tf.layers.dense(name="pred", inputs=dropout, units=1)
-
-        # Mean squared error
-        # loss = tf.reduce_sum(tf.pow(self.pred - self.y, 2)) / (2 * batch_size)
+        self.scores = tf.layers.dense(inputs=dense, units=board_size[0] * board_size[1])
+        self.predictions = tf.argmax(self.scores, 1, name="predictions")
 
         self.loss = tf.reduce_mean(
-            tf.nn.softmax_cross_entropy_with_logits(labels=self.y, logits=self.pred))
+            tf.nn.softmax_cross_entropy_with_logits(labels=self.y, logits=self.scores))
+
+        correct_predictions = tf.equal(self.predictions, tf.argmax(self.y, 1))
+        self.accuracy = tf.reduce_mean(tf.cast(correct_predictions, "float"), name="accuracy")
+
         # Gradient descent
 
         # self.optimizer = tf.train.GradientDescentOptimizer(self.learning_rate).minimize(self.loss)
@@ -123,14 +123,13 @@ class WuziqiPolicyNet(interfaces.IPolicy):
         self.sess.run(init)
 
     def suggest(self, state, side, count):
-        pred = self.sess.run(self.pred, {self.state: state,
-                                         self.mode: learn.ModeKeys.EVAL})
+        pred = self.sess.run(self.scores, {self.state: state,
+                                           self.mode: learn.ModeKeys.EVAL})
         reshaped_pred = np.reshape(pred, self.board_size)
         filled_pos = np.where(state != 0)
 
         actions = []
         reshaped_pred[filled_pos] = -1
-        # legitimate_actions = np.where(reshaped_pred != -1)
 
         for i in range(count):
             index = np.unravel_index(np.argmax(reshaped_pred), self.board_size)
@@ -160,18 +159,16 @@ class WuziqiPolicyNet(interfaces.IPolicy):
 
         for i in range(state_shape[0]):
             action = data[i][1]
-            y[i, action.x, action.y] = 1
+            y[i, action.y, action.x] = 1.0
 
         y = y.reshape((state_shape[0], self.board_size[0]*self.board_size[1]))
 
         for i in range(self.training_epics):
-            loss, _ = self.sess.run([self.loss, optimizer], {self.state: states,
+            accuracy, _ = self.sess.run([self.accuracy, optimizer], {self.state: states,
                                                              self.y: y,
                                                              self.mode: learn.ModeKeys.TRAIN})
             if (i + 1) % 25 == 0 or i == 0:
-                print("epic %d policy losses: %f" % (i, loss))
-            if loss < 0.0015:
-                break
+                print("epic %d policy accuracy: %f" % (i, accuracy))
 
     def save(self, save_path):
         saver = tf.train.Saver()
