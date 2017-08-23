@@ -25,6 +25,8 @@ class WuziqiQValueNet(interfaces.IActionEvaluator):
         self.kernel_size3 = [2, 2]
         self.pool_size = [2, 2]
         self.training_epics = 100
+        self.minimum_training_size = 100
+        self.cached_training_data = None
 
         input_layer = tf.reshape(
             self.state_actions, [-1, board_size[0], board_size[1], 2],
@@ -154,11 +156,34 @@ class WuziqiQValueNet(interfaces.IActionEvaluator):
                                 self.y: r + self.lbd * self.evaluate(next_state, next_action),
                                 self.mode: learn.ModeKeys.TRAIN})
 
+    def merge_with_cached_training_data(self, training_data):
+        if training_data[1].shape[0] == 0:
+            return self.cached_training_data
+        if self.cached_training_data is None:
+            self.cached_training_data = training_data
+        else:
+            self.cached_training_data = [
+                np.vstack((self.cached_training_data[0], training_data[0])),
+                np.vstack((self.cached_training_data[1], training_data[1]))]
+        return self.cached_training_data
+
+    def callback_training_data(self, state_actions, y):
+        predicted_y = self.lbd * self.sess.run(self.pred, {self.state_actions: state_actions,
+                                                           self.mode: learn.ModeKeys.EVAL})
+
+        index = np.where((y * self.lbd - predicted_y) > y * (1 - self.lbd)/2)[0]
+        print("callback records: %s" % (index.shape))
+        self.cached_training_data = [state_actions[index], y[index]]
+
     def train(self, learning_rate, data):
-        state_actions, y = self.build_td_training_data(data)
-        if len(y) == 0:
+        train_data = self.merge_with_cached_training_data(self.build_td_training_data(data))
+
+        if train_data is None or train_data[1].shape[0] <= self.minimum_training_size:
             return 0
-        print("Value-Net learning rate: ", learning_rate)
+
+        state_actions, y = train_data
+
+        print("Value-Net learning rate: %f train_size: %d" % (learning_rate, train_data[1].shape[0]))
 
         def eval_epic(epic, loss):
             print("epic %d: %f " % (epic, loss))
@@ -167,12 +192,12 @@ class WuziqiQValueNet(interfaces.IActionEvaluator):
             result = np.append(vals, np.reshape(y[0:20], vals.shape), axis=1)
             print(result)
 
-        loss = self.sess.run(self.loss, {self.state_actions: state_actions,
-                                         self.y: y,
-                                         self.mode: learn.ModeKeys.TRAIN})
-
-        if loss > 0.01:
-            learning_rate *= 2
+        loss = self.sess.run(self.loss,
+                                {self.state_actions: state_actions,
+                                 self.y: y,
+                                 self.mode: learn.ModeKeys.TRAIN})
+        if loss < 0.00005:
+            return loss
 
         optimizer = tf.train.GradientDescentOptimizer(learning_rate).minimize(self.loss)
         for i in range(self.training_epics):
@@ -182,6 +207,8 @@ class WuziqiQValueNet(interfaces.IActionEvaluator):
                                      self.mode: learn.ModeKeys.TRAIN})
             if (i + 1) % 25 == 0 or i == 0:
                 eval_epic(i, loss)
+
+        self.callback_training_data(state_actions, y)
 
         return loss
 
@@ -233,9 +260,15 @@ class WuziqiQValueNet(interfaces.IActionEvaluator):
                 end_value = reward + self.lbd * end_value
                 if end_value * self.lbd > session_y[index]:
                     inputs.append(self.build_state_action(state, action))
-                    y.append(end_value)
-        print("Training count:", len(y))
-        return inputs, y
+                    y.append([end_value])
+                elif session_y[index] > 1 and reward == 0:
+                    inputs.append(self.build_state_action(state, action))
+                    y.append([self.lbd])
+                elif reward == 1 and (session_y[index] * self.lbd - 1) > (1 - self.lbd)/2:
+                    inputs.append(self.build_state_action(state, action))
+                    y.append([1])
+
+        return np.array(inputs), np.array(y)
 
     def save(self, save_path):
         saver = tf.train.Saver()

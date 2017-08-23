@@ -19,7 +19,9 @@ class WuziqiPolicyNet(interfaces.IPolicy):
         self.kernel_size2 = [2, 2]
         self.kernel_size3 = [2, 2]
         self.pool_size = [2, 2]
-        self.training_epics = 100
+        self.training_epics = 75
+        self.cached_training_data = None
+        self.maximum_training_size = 5000
 
         input_layer = tf.reshape(
             self.state, [-1, board_size[0], board_size[1], 1], name="policy_input_layer")
@@ -150,10 +152,24 @@ class WuziqiPolicyNet(interfaces.IPolicy):
                                 self.y: y,
                                 self.mode: learn.ModeKeys.TRAIN})
 
+    def merge_with_cached_training_data(self, training_data):
+        if self.cached_training_data is None:
+            self.cached_training_data = training_data
+        else:
+            self.cached_training_data = [
+                np.vstack((self.cached_training_data[0], training_data[0])),
+                np.vstack((self.cached_training_data[1], training_data[1]))]
+        data_length = self.cached_training_data[1].shape[0]
+        if data_length > self.maximum_training_size:
+            self.cached_training_data = [
+                self.cached_training_data[0][data_length - self.maximum_training_size:],
+                self.cached_training_data[1][data_length - self.maximum_training_size:]]
+        return self.cached_training_data
+
     def train(self, learning_rate, data):
-        print("Policy-Net learning rate: ", learning_rate)
+
         optimizer = tf.train.GradientDescentOptimizer(learning_rate).minimize(self.loss)
-        states = [s for s, _ in data]
+        states = np.array([s for s, _ in data])
         state_shape = np.shape(states)
         y = np.zeros((state_shape[0], self.board_size[0], self.board_size[1]))
 
@@ -162,6 +178,10 @@ class WuziqiPolicyNet(interfaces.IPolicy):
             y[i, action.y, action.x] = 1.0
 
         y = y.reshape((state_shape[0], self.board_size[0]*self.board_size[1]))
+
+        states, y = self.merge_with_cached_training_data([states, y])
+
+        print("Policy-Net learning rate: %f training size %s" % (learning_rate, y.shape))
 
         for i in range(self.training_epics):
             accuracy, _ = self.sess.run([self.accuracy, optimizer], {self.state: states,

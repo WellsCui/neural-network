@@ -13,7 +13,7 @@ class CompetingAgent(interfaces.IAgent):
         self.side = side
         self.value_net_learning_rate = initial_learning_rate
         self.policy_net_learning_rate = initial_learning_rate
-        self.minimum_learning_rate = 0.0002
+        self.minimum_learning_rate = 0.0001
         self.learning_rate_dacade_rate = 0.5
         self.policy = game.wuziqi_policy_net.WuziqiPolicyNet(board_size, initial_learning_rate, lbd)
         self.qnet = game.wuziqi_value_net.WuziqiQValueNet(board_size, initial_learning_rate, lbd)
@@ -24,7 +24,7 @@ class CompetingAgent(interfaces.IAgent):
         self.policy_training_data = []
         self.value_net_training_data = []
         self.value_net_training_size = 50
-        self.policy_training_size = 2000
+        self.policy_training_size = 300
         self.epsilon = 0.001
         self.greedy_rate = 0.5
         self.board_size = board_size
@@ -210,19 +210,15 @@ class CompetingAgent(interfaces.IAgent):
 
         available_actions = [a for a in self. get_available_actions(environment, self.side) if not contains(actions, a)]
         random_count -= len(selected_indirect_neighbor_actions)
-        if random_count > 0:
+        if random_count >= len(available_actions):
+            random_actions = available_actions
+        elif random_count > 0:
             random_actions = random.sample(available_actions, random_count)
         else:
             random_actions = []
-        # print("policy: %d, direct: %d, indirect: %d, random: %d" %
-        #       (len(policy_actions),
-        #        len(direct_neighbor_actions),
-        #        len(selected_indirect_neighbor_actions),
-        #        len(random_actions)))
 
         actions += random_actions
         return policy_actions, actions
-
 
     def rehearsal(self, environment: interfaces.IEnvironment, action, opponent_policy: interfaces.IPolicy, steps):
         def get_reward(side):
