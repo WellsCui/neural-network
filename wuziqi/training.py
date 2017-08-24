@@ -197,9 +197,6 @@ def run_competing_agent(times, train_all_after, restored):
         print("Starting Game ", i)
         game = wuziqi.WuziqiGame(board_size)
         step = 0
-        if i > train_all_after:
-            player1.train_sessions_with_end_only = False
-            player2.train_sessions_with_end_only = False
         if i % 2 == 0:
             first_player = player1
             second_player = player2

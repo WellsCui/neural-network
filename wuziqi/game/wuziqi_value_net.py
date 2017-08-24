@@ -133,13 +133,24 @@ class WuziqiQValueNet(interfaces.IActionEvaluator):
         return self.sess.run(self.pred, {self.state_actions: self.build_state_action(state, action),
                                          self.mode: learn.ModeKeys.EVAL})[0, 0]
 
-    def suggest(self, state, candidate_actions):
-        evaluate_data = [self.build_state_action(state, action) for action in candidate_actions]
+    def suggest(self, environment, candidate_actions, suggest_count=1):
+        state = environment.get_state().copy()
+        reversed_state = environment.get_state().copy()
+        candidate_count = len(candidate_actions)
+        evaluate_data = np.vstack(([self.build_state_action(state, action) for action in candidate_actions],
+                                   [self.build_state_action(reversed_state, action) for action in candidate_actions]))
 
         results = self.sess.run(self.pred, {self.state_actions: evaluate_data,
                                             self.mode: learn.ModeKeys.EVAL})
-        max_index = np.argmax(results)
-        return candidate_actions[max_index]
+
+        results = np.hstack((results[:candidate_count], results[candidate_count:]))
+
+        chosen = []
+        for i in range(suggest_count):
+            max_index = np.unravel_index(np.argmax(results), results.shape)
+            chosen.append(candidate_actions[max_index[0]])
+            results[max_index] = -1
+        return chosen
 
     def build_state_action(self, state, action):
         action_data = np.zeros(self.board_size)
@@ -167,12 +178,12 @@ class WuziqiQValueNet(interfaces.IActionEvaluator):
                 np.vstack((self.cached_training_data[1], training_data[1]))]
         return self.cached_training_data
 
-    def callback_training_data(self, state_actions, y):
+    def recall_training_data(self, state_actions, y):
         predicted_y = self.lbd * self.sess.run(self.pred, {self.state_actions: state_actions,
                                                            self.mode: learn.ModeKeys.EVAL})
 
         index = np.where((y * self.lbd - predicted_y) > y * (1 - self.lbd)/2)[0]
-        print("callback records: %s" % (index.shape))
+        print("recall records: %s in %s" % (index.shape, y.shape))
         self.cached_training_data = [state_actions[index], y[index]]
 
     def train(self, learning_rate, data):
@@ -208,7 +219,7 @@ class WuziqiQValueNet(interfaces.IActionEvaluator):
             if (i + 1) % 25 == 0 or i == 0:
                 eval_epic(i, loss)
 
-        self.callback_training_data(state_actions, y)
+        self.recall_training_data(state_actions, y)
 
         return loss
 
@@ -248,7 +259,7 @@ class WuziqiQValueNet(interfaces.IActionEvaluator):
             end_value = 0
             if end_action.val != 0:
                 end_value = self.evaluate(end_state, end_action)
-            if end_value < 0.2 and session[-2][2] == 0:
+            if end_value < (1 - self.lbd) and session[-2][2] == 0:
                 continue
 
             session_inputs = np.array([self.build_state_action(state, action) for state, action, _ in session])
@@ -258,7 +269,7 @@ class WuziqiQValueNet(interfaces.IActionEvaluator):
             for index in range(steps - 2, 0, -1):
                 state, action, reward = session[index]
                 end_value = reward + self.lbd * end_value
-                if end_value * self.lbd > session_y[index]:
+                if end_value * self.lbd - session_y[index] > session_y[index] * (1 - self.lbd)/2:
                     inputs.append(self.build_state_action(state, action))
                     y.append([end_value])
                 elif session_y[index] > 1 and reward == 0:

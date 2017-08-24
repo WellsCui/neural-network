@@ -13,8 +13,8 @@ class CompetingAgent(interfaces.IAgent):
         self.side = side
         self.value_net_learning_rate = initial_learning_rate
         self.policy_net_learning_rate = initial_learning_rate
-        self.minimum_learning_rate = 0.0001
-        self.learning_rate_dacade_rate = 0.5
+        self.minimum_learning_rate = 0.0002
+        self.learning_rate_dacade_rate = 0.6
         self.policy = game.wuziqi_policy_net.WuziqiPolicyNet(board_size, initial_learning_rate, lbd)
         self.qnet = game.wuziqi_value_net.WuziqiQValueNet(board_size, initial_learning_rate, lbd)
         self.mode = "online_learning."
@@ -29,7 +29,6 @@ class CompetingAgent(interfaces.IAgent):
         self.greedy_rate = 0.5
         self.board_size = board_size
         self.is_greedy = False
-        self.train_sessions_with_end_only = True
         self.last_action = None
         self.qnet_error = 1
 
@@ -108,7 +107,7 @@ class CompetingAgent(interfaces.IAgent):
 
     def train_value_net(self, rehearsals):
         for h1, h2, final_state in rehearsals:
-            if self.train_sessions_with_end_only:
+            if self.qnet_error > 0.001:
                 if final_state == 1:
                     self.value_net_training_data.append(h1)
                 elif final_state == -1:
@@ -119,12 +118,11 @@ class CompetingAgent(interfaces.IAgent):
 
         if len(self.value_net_training_data) >= self.value_net_training_size:
             error = self.qnet.train(self.value_net_learning_rate, self.value_net_training_data)
-            if error < 0.01:
-                self.train_sessions_with_end_only = False
+            if error > 0:
+                if error < self.learning_rate_dacade_rate * self.qnet_error and self.value_net_learning_rate > self.minimum_learning_rate:
+                    self.value_net_learning_rate *= self.learning_rate_dacade_rate
+                    self.qnet_error = error
 
-            if error < self.learning_rate_dacade_rate * self.qnet_error and self.value_net_learning_rate > self.minimum_learning_rate:
-                self.value_net_learning_rate *= self.learning_rate_dacade_rate
-            self.qnet_error = error
             self.value_net_training_data = []
 
     def evaluate_rehearsal(self, rehearsal):
@@ -203,8 +201,10 @@ class CompetingAgent(interfaces.IAgent):
 
         if indirect_neighbor_count >= len(indirect_neighbor_actions):
             selected_indirect_neighbor_actions = indirect_neighbor_actions
-        else:
+        elif self.qnet_error > 0.0005:
             selected_indirect_neighbor_actions = random.sample(indirect_neighbor_actions, indirect_neighbor_count)
+        else:
+            selected_indirect_neighbor_actions = self.qnet.suggest(environment, indirect_neighbor_actions, indirect_neighbor_count)
 
         actions += selected_indirect_neighbor_actions
 
@@ -252,7 +252,7 @@ class CompetingAgent(interfaces.IAgent):
                 reversed_environment = environment.reverse()
                 next_state_2 = reversed_environment.get_state().copy()
                 _, candidate_actions = self.get_candidate_actions(reversed_environment, next_action_2)
-                next_action_2 = self.qnet.suggest(next_state_2, candidate_actions)
+                next_action_2 = self.qnet.suggest(reversed_environment, candidate_actions, 1)[0]
                 # next_action_2 = get_partial_random_action(opponent_policy.suggest(next_state_2, self.side * -1, 1)[0],
                 #                                           self.side * -1)
 
@@ -270,7 +270,7 @@ class CompetingAgent(interfaces.IAgent):
                 else:
                     next_state_1 = state
                     _, candidate_actions = self.get_candidate_actions(environment, next_action_1)
-                    next_action_1 = self.qnet.suggest(next_state_1, candidate_actions)
+                    next_action_1 = self.qnet.suggest(environment, candidate_actions, 1)[0]
                     # next_action_1 = get_partial_random_action(self.policy.suggest(state, self.side, 1)[0], self.side)
         return history1, history2, final_state
 
