@@ -259,8 +259,12 @@ class WuziqiQValueNet(interfaces.IActionEvaluator):
             end_value = 0
             if end_action.val != 0:
                 end_value = self.evaluate(end_state, end_action)
-            if end_value < (1 - self.lbd) and session[-2][2] == 0:
-                continue
+                if end_value - self.lbd > (1 - self.lbd) / 2:
+                    end_value = self.lbd
+                    inputs.append(self.build_state_action(end_state, end_action))
+                    y.append([end_value])
+                elif end_value < (1 - self.lbd):
+                    continue
 
             session_inputs = np.array([self.build_state_action(state, action) for state, action, _ in session])
             session_y = self.lbd * self.sess.run(self.pred, {self.state_actions: session_inputs[1:],
@@ -269,12 +273,16 @@ class WuziqiQValueNet(interfaces.IActionEvaluator):
             for index in range(steps - 2, 0, -1):
                 state, action, reward = session[index]
                 end_value = reward + self.lbd * end_value
-                if end_value * self.lbd - session_y[index] > session_y[index] * (1 - self.lbd)/2:
+                if end_value * self.lbd - session_y[index] > end_value * (1 - self.lbd)/2:
                     inputs.append(self.build_state_action(state, action))
                     y.append([end_value])
-                elif session_y[index] > 1 and reward == 0:
+                elif session_y[index] - self.lbd > (1 - self.lbd)/2 and reward == 0:
                     inputs.append(self.build_state_action(state, action))
                     y.append([self.lbd])
+                # elif end_value - self.lbd > (1 - self.lbd) / 2:
+                #     end_value = self.lbd
+                #     inputs.append(self.build_state_action(end_state, end_action))
+                #     y.append([end_value])
                 elif reward == 1 and (session_y[index] * self.lbd - 1) > (1 - self.lbd)/2:
                     inputs.append(self.build_state_action(state, action))
                     y.append([1])
