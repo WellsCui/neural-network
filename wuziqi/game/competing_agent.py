@@ -24,13 +24,14 @@ class CompetingAgent(interfaces.IAgent):
         self.policy_training_data = []
         self.value_net_training_data = []
         self.value_net_training_size = 50
-        self.policy_training_size = 300
+        self.policy_training_size = 200
         self.epsilon = 0.001
         self.greedy_rate = 0.5
         self.board_size = board_size
         self.is_greedy = False
         self.last_action = None
         self.qnet_error = 1
+        self.policy_accuracy = [0, 0, 0]
 
     def act(self, environment: interfaces.IEnvironment):
         state = environment.get_state().copy()
@@ -44,18 +45,19 @@ class CompetingAgent(interfaces.IAgent):
 
         best_action = self.choose_best_action_from_rehearsals(rehearsals, reversed_rehearsals)
 
+        if self.qnet_error < 0.0005:
+            self.policy_training_data.append([state, best_action])
+
         if self.is_greedy:
             action = best_action
         else:
             action = game.utils.partial_random(best_action, actions, self.greedy_rate)
 
-        print("%s: best (%d, %d): %f, policy (%d, %d): %f, best: %s, actual (%d, %d): %f best: %s" %
+        print("%s: best (%d, %d): %f, in policy: %s, actual (%d, %d): %f best: %s" %
               (self.name,
                best_action.x, best_action.y,
                self.qnet.evaluate(state, best_action),
-               policy_actions[0].x, policy_actions[0].y,
-               self.qnet.evaluate(state, policy_actions[0]),
-               best_action == policy_actions[0],
+               self.contain_action(policy_actions, best_action),
                action.x, action.y,
                self.qnet.evaluate(state, action),
                action == best_action))
@@ -100,7 +102,7 @@ class CompetingAgent(interfaces.IAgent):
         print("policy_training_data:", len(self.policy_training_data))
 
         if len(self.policy_training_data) > self.policy_training_size:
-            self.policy.train(self.policy_net_learning_rate, self.policy_training_data)
+            self.policy_accuracy = self.policy.train(self.policy_net_learning_rate, self.policy_training_data)
             if self.policy_net_learning_rate > self.minimum_learning_rate:
                 self.policy_net_learning_rate *= self.learning_rate_dacade_rate
             self.policy_training_data = []
@@ -146,34 +148,33 @@ class CompetingAgent(interfaces.IAgent):
             actions.append(wuziqi.WuziqiAction(points[0][i], points[1][i], side))
         return actions
 
+    @staticmethod
+    def contain_action(ps, p):
+        for item in ps:
+            if item.x == p.x and item.y == p.y:
+                return True
+        return False
+
+    @staticmethod
+    def merge_actions(p1, p2):
+        return p1 + [p for p in p2 if not CompetingAgent.contain_action(p1, p)]
+
     def get_candidate_actions(self, environment: interfaces.IEnvironment, last_action):
 
         def pos_to_action(pos: wuziqi.Position):
             return wuziqi.WuziqiAction(pos.x, pos.y, self.side)
 
-        def contains(ps, p):
-            for item in ps:
-                if item.x == p.x and item.y == p.y:
-                    return True
-            return False
-
-        def merge(p1, p2):
-            return p1 + [p for p in p2 if not contains(p1, p)]
         # select_count = int(self.think_width * self.greedy_rate)
 
-        select_count = 1
-        policy_actions = merge(self.policy.suggest(environment.get_state(), self.side, select_count),
-                               self.policy.suggest(environment.reverse().get_state(), self.side, select_count))
-
-        if last_action is None:
-            direct_neighbors_1 = []
-        else:
-            direct_neighbors_1 = environment.neighbor(wuziqi.Position(last_action.x, last_action.y), 2, True)
-        if environment.last_action is None:
-            direct_neighbors_2 = []
-        else:
-            direct_neighbors_2 = environment.neighbor(
-                wuziqi.Position(environment.last_action.x, environment.last_action.y), 2, True)
+        # if last_action is None:
+        #     direct_neighbors_1 = []
+        # else:
+        #     direct_neighbors_1 = environment.neighbor(wuziqi.Position(last_action.x, last_action.y), 2, True)
+        # if environment.last_action is None:
+        #     direct_neighbors_2 = []
+        # else:
+        #     direct_neighbors_2 = environment.neighbor(
+        #         wuziqi.Position(environment.last_action.x, environment.last_action.y), 2, True)
 
         if last_action is None:
             indirect_neighbors_1 = []
@@ -186,46 +187,81 @@ class CompetingAgent(interfaces.IAgent):
             indirect_neighbors_2 = environment.neighbor(
                 wuziqi.Position(environment.last_action.x, environment.last_action.y), 5, True)
 
-        direct_neighbor_actions = [a for a in
-                                   [pos_to_action(pos) for pos in merge(direct_neighbors_1, direct_neighbors_2)]
-                                   if not contains(policy_actions, a)]
+        neighbor_actions = [a for a in [pos_to_action(pos) for pos
+                                        in self.merge_actions(indirect_neighbors_1, indirect_neighbors_2)]]
 
-        actions = policy_actions + direct_neighbor_actions
+        select_count = int(self.search_width/2)
 
-        indirect_neighbor_actions = [a for a in
-                                     [pos_to_action(pos) for pos in merge(indirect_neighbors_1, indirect_neighbors_2)]
-                                     if not contains(actions, a)]
+        policy_actions = [a for a in self.merge_actions(self.policy.suggest(environment.get_state(), self.side, select_count),
+                                           self.policy.suggest(environment.reverse().get_state(), self.side, select_count))
+                          if self.contain_action(neighbor_actions, a)]
 
-        random_count = self.search_width - len(actions)
-        indirect_neighbor_count = int(random_count * 0.8)
+        # indirect_neighbor_actions = [a for a in
+        #                              [pos_to_action(pos) for pos in merge(indirect_neighbors_1, indirect_neighbors_2)]
+        #                              if contains(policy_actions, a) and not contains(direct_neighbor_actions, a)]
 
-        if indirect_neighbor_count >= len(indirect_neighbor_actions):
-            selected_indirect_neighbor_actions = indirect_neighbor_actions
-        elif self.qnet_error > 0.0005:
-            selected_indirect_neighbor_actions = random.sample(indirect_neighbor_actions, indirect_neighbor_count)
-        else:
-            selected_indirect_neighbor_actions = self.qnet.suggest(environment, indirect_neighbor_actions, indirect_neighbor_count)
+        # sample_count = 20 - len(direct_neighbor_actions)
+        #
+        # if len(no_direct_neighbor_policy_actions_) > sample_count:
+        #     actions = direct_neighbor_actions + no_direct_neighbor_policy_actions_[0:sample_count]
+        # else:
+        #     actions = direct_neighbor_actions + no_direct_neighbor_policy_actions_
 
-        actions += selected_indirect_neighbor_actions
+        # random_count = self.search_width - len(actions)
+        # indirect_neighbor_count = int(random_count * 0.8)
+        #
+        # if indirect_neighbor_count >= len(indirect_neighbor_actions):
+        #     selected_indirect_neighbor_actions = indirect_neighbor_actions
+        # elif self.qnet_error > 0.0005:
+        #     selected_indirect_neighbor_actions = random.sample(indirect_neighbor_actions, indirect_neighbor_count)
+        # else:
+        #     selected_indirect_neighbor_actions = self.qnet.suggest(environment, indirect_neighbor_actions, indirect_neighbor_count)
+        #
+        # actions += selected_indirect_neighbor_actions
+        #
+        # available_actions = [a for a in self. get_available_actions(environment, self.side) if not contains(actions, a)]
+        # random_count -= len(selected_indirect_neighbor_actions)
+        # if random_count >= len(available_actions):
+        #     random_actions = available_actions
+        # elif random_count > 0:
+        #     random_actions = random.sample(available_actions, random_count)
+        # else:
+        #     random_actions = []
+        #
+        # actions += random_actions
 
-        available_actions = [a for a in self. get_available_actions(environment, self.side) if not contains(actions, a)]
-        random_count -= len(selected_indirect_neighbor_actions)
-        if random_count >= len(available_actions):
-            random_actions = available_actions
-        elif random_count > 0:
-            random_actions = random.sample(available_actions, random_count)
-        else:
-            random_actions = []
-
-        actions += random_actions
-        return policy_actions, actions
+        return policy_actions, policy_actions
 
     def rehearsal(self, environment: interfaces.IEnvironment, action, opponent_policy: interfaces.IPolicy, steps):
         def get_reward(side):
             return wuziqi.WuziqiGame.eval_state(environment.board_size, environment.get_state()) * side
 
-        def get_partial_random_action(best_action, side):
-            return game.utils.partial_random(best_action, self.get_available_actions(environment, side), self.greedy_rate)
+        def get_partial_random_action(best_actions):
+            return game.utils.partial_random(best_actions[0], best_actions[1:], self.greedy_rate)
+
+        def get_possibilities():
+            other_possibilities = (1 - self.policy_accuracy[2]) / 10
+            top1_possibilities = self.policy_accuracy[0] + other_possibilities
+            top5_possibilities = (self.policy_accuracy[1]-self.policy_accuracy[0])/4 + other_possibilities
+            top10_possibilities = (self.policy_accuracy[2]-self.policy_accuracy[1])/5 + other_possibilities
+
+            return np.vstack(([[top1_possibilities]],
+                       np.ones((4, 1)) * top5_possibilities,
+                       np.ones((5, 1)) * top10_possibilities)).reshape((10,))
+
+        def get_action_from_policy(policy: interfaces.IPolicy):
+            p = get_possibilities()
+            candidates = policy.suggest(environment.get_state(), self.side, 10)
+            chosen_action = np.random.choice(candidates, p=p)
+            action_val = self.qnet.evaluate(environment.get_state(), chosen_action)
+            reversed_state = environment.reverse().get_state()
+            reversed_candidates = policy.suggest(reversed_state, self.side, 10)
+            chosen_reversed_action = np.random.choice(reversed_candidates, p=p)
+            reversed_action_val = self.qnet.evaluate(reversed_state, chosen_reversed_action)
+            if action_val > reversed_action_val:
+                return chosen_action
+            else:
+                return chosen_reversed_action
 
         history1 = []
         history2 = []
@@ -251,10 +287,9 @@ class CompetingAgent(interfaces.IAgent):
             else:
                 reversed_environment = environment.reverse()
                 next_state_2 = reversed_environment.get_state().copy()
-                _, candidate_actions = self.get_candidate_actions(reversed_environment, next_action_2)
-                next_action_2 = self.qnet.suggest(reversed_environment, candidate_actions, 1)[0]
-                # next_action_2 = get_partial_random_action(opponent_policy.suggest(next_state_2, self.side * -1, 1)[0],
-                #                                           self.side * -1)
+                # _, candidate_actions = self.get_candidate_actions(reversed_environment, next_action_2)
+                # next_action_2 = self.qnet.suggest(reversed_environment, candidate_actions, 1)[0]
+                next_action_2 = get_action_from_policy(opponent_policy)
 
                 state = environment.update(next_action_2.reverse()).copy()
                 r2 = get_reward(self.side * -1)
@@ -269,9 +304,10 @@ class CompetingAgent(interfaces.IAgent):
                     break
                 else:
                     next_state_1 = state
-                    _, candidate_actions = self.get_candidate_actions(environment, next_action_1)
-                    next_action_1 = self.qnet.suggest(environment, candidate_actions, 1)[0]
-                    # next_action_1 = get_partial_random_action(self.policy.suggest(state, self.side, 1)[0], self.side)
+                    # _, candidate_actions = self.get_candidate_actions(environment, next_action_1)
+                    # next_action_1 = self.qnet.suggest(environment, candidate_actions, 1)[0]
+
+                    next_action_1 = get_action_from_policy(self.policy)
         return history1, history2, final_state
 
     def save(self, save_dir):

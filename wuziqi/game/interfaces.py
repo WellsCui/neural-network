@@ -12,21 +12,26 @@ class IEnvironment(metaclass=ABCMeta):
     def clone(self):
         pass
 
+    def reverse(self):
+        pass
+
+
 class IAgent(metaclass=ABCMeta):
     @abstractmethod
     def act(self, environment: IEnvironment):
         pass
-
 
 class IEvaluator(metaclass=ABCMeta):
     @abstractmethod
     def evaluate(self, environment: IEnvironment):
         pass
 
+
 class IActionEvaluator(metaclass=ABCMeta):
     @abstractmethod
     def evaluate(self, environment: IEnvironment, action):
         pass
+
 
 class IPolicy(metaclass=ABCMeta):
     @abstractmethod

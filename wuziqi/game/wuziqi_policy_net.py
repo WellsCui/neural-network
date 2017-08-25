@@ -12,16 +12,16 @@ class WuziqiPolicyNet(interfaces.IPolicy):
         # Input Layer
         self.mode = tf.placeholder(tf.string)
         self.state = tf.placeholder(tf.float32)
-        self.y = tf.placeholder(tf.int32)
+        self.y = tf.placeholder(tf.int32, shape=[None, board_size[0] * board_size[1]])
         self.lbd = lbd
         self.r = 0.05
         self.kernel_size1 = [2, 2]
         self.kernel_size2 = [2, 2]
         self.kernel_size3 = [2, 2]
         self.pool_size = [2, 2]
-        self.training_epics = 75
+        self.training_epics = 100
         self.cached_training_data = None
-        self.maximum_training_size = 5000
+        self.maximum_training_size = 2000
 
         input_layer = tf.reshape(
             self.state, [-1, board_size[0], board_size[1], 1], name="policy_input_layer")
@@ -112,18 +112,22 @@ class WuziqiPolicyNet(interfaces.IPolicy):
         self.loss = tf.reduce_mean(
             tf.nn.softmax_cross_entropy_with_logits(labels=self.y, logits=self.scores))
 
-        correct_predictions = tf.equal(self.predictions, tf.argmax(self.y, 1))
+        y_index = tf.argmax(self.y, 1)
+
+        correct_predictions = tf.equal(self.predictions, y_index)
         self.accuracy = tf.reduce_mean(tf.cast(correct_predictions, "float"), name="accuracy")
-        self.top_5_accuracy = tf.metrics.mean(tf.nn.in_top_k(predictions=self.scores, targets=self.y, k=5))
+        correct_predictions_in_top_5 = tf.nn.in_top_k(predictions=self.scores, targets=y_index, k=5)
+        correct_predictions_in_top_10 = tf.nn.in_top_k(predictions=self.scores, targets=y_index, k=10)
+        self.top_5_accuracy = tf.reduce_mean(tf.cast(correct_predictions_in_top_5, "float"))
+        self.top_10_accuracy = tf.reduce_mean(tf.cast(correct_predictions_in_top_10, "float"))
 
         # Gradient descent
 
         # self.optimizer = tf.train.GradientDescentOptimizer(self.learning_rate).minimize(self.loss)
-        init = tf.global_variables_initializer()
-
         # print("trainable_variables:", tf.trainable_variables())
         self.sess = tf.Session()
-        self.sess.run(init)
+        self.sess.run(tf.global_variables_initializer())
+        self.sess.run(tf.local_variables_initializer())
 
     def suggest(self, state, side, count):
         pred = self.sess.run(self.scores, {self.state: state,
@@ -134,9 +138,14 @@ class WuziqiPolicyNet(interfaces.IPolicy):
         actions = []
         reshaped_pred[filled_pos] = -1
 
-        for i in range(count):
+        def is_pos_available(x, y):
+            return state[x, y] == 0
+
+        while count > 0:
             index = np.unravel_index(np.argmax(reshaped_pred), self.board_size)
-            actions.append(wuziqi.WuziqiAction(index[1], index[0], side))
+            if is_pos_available(index[0], index[1]):
+                actions.append(wuziqi.WuziqiAction(index[0], index[1], side))
+                count -= 1
             reshaped_pred[index] = -1
         return actions
 
@@ -176,7 +185,7 @@ class WuziqiPolicyNet(interfaces.IPolicy):
 
         for i in range(state_shape[0]):
             action = data[i][1]
-            y[i, action.y, action.x] = 1
+            y[i, action.x, action.y] = 1
 
         y = y.reshape((state_shape[0], self.board_size[0]*self.board_size[1]))
 
@@ -184,12 +193,20 @@ class WuziqiPolicyNet(interfaces.IPolicy):
 
         print("Policy-Net learning rate: %f training size %s" % (learning_rate, y.shape))
 
+        accuracy, top_5_accuracy, top_10_accuracy = [0, 0, 0]
+
         for i in range(self.training_epics):
-            accuracy, top_5_accuracy, _ = self.sess.run([self.accuracy, self.top_5_accuracy, optimizer], {self.state: states,
-                                                             self.y: y,
-                                                             self.mode: learn.ModeKeys.TRAIN})
+            accuracy, top_5_accuracy, top_10_accuracy, _ = self.sess.run([self.accuracy,
+                                                                          self.top_5_accuracy,
+                                                                          self.top_10_accuracy,
+                                                                          optimizer],
+                                                                         {self.state: states,
+                                                                          self.y: y,
+                                                                          self.mode: learn.ModeKeys.TRAIN})
             if (i + 1) % 25 == 0 or i == 0:
-                print("epic %d policy accuracy: %f top_5_accuracy: %f" % (i, accuracy, top_5_accuracy))
+                print("epic %d policy accuracy: %f top_5_accuracy: %f , top_10_accuracy: %f"
+                      % (i, accuracy, top_5_accuracy, top_10_accuracy))
+        return [accuracy, top_5_accuracy, top_10_accuracy]
 
     def save(self, save_path):
         saver = tf.train.Saver()

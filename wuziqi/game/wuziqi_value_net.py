@@ -182,8 +182,8 @@ class WuziqiQValueNet(interfaces.IActionEvaluator):
         predicted_y = self.lbd * self.sess.run(self.pred, {self.state_actions: state_actions,
                                                            self.mode: learn.ModeKeys.EVAL})
 
-        index = np.where((y * self.lbd - predicted_y) > y * (1 - self.lbd)/2)[0]
-        print("recall records: %s in %s" % (index.shape, y.shape))
+        index = np.where((y - predicted_y) > (y * (1 - self.lbd)/2))[0]
+        print("recall records: %s in %s" % (index.shape[0], y.shape[0]))
         self.cached_training_data = [state_actions[index], y[index]]
 
     def train(self, learning_rate, data):
@@ -251,6 +251,7 @@ class WuziqiQValueNet(interfaces.IActionEvaluator):
     def build_td_training_data(self, data):
         inputs = []
         y = []
+        margin = (1 - self.lbd) / 2
         for session in data:
             steps = len(session)
             if steps < 2:
@@ -259,11 +260,11 @@ class WuziqiQValueNet(interfaces.IActionEvaluator):
             end_value = 0
             if end_action.val != 0:
                 end_value = self.evaluate(end_state, end_action)
-                if end_value - self.lbd > (1 - self.lbd) / 2:
+                if end_value - self.lbd > margin:
                     end_value = self.lbd
                     inputs.append(self.build_state_action(end_state, end_action))
                     y.append([end_value])
-                elif end_value < (1 - self.lbd):
+                elif end_value < margin * 2:
                     continue
 
             session_inputs = np.array([self.build_state_action(state, action) for state, action, _ in session])
@@ -273,17 +274,17 @@ class WuziqiQValueNet(interfaces.IActionEvaluator):
             for index in range(steps - 2, 0, -1):
                 state, action, reward = session[index]
                 end_value = reward + self.lbd * end_value
-                if end_value * self.lbd - session_y[index] > end_value * (1 - self.lbd)/2:
+                if end_value - session_y[index] > end_value * margin:
                     inputs.append(self.build_state_action(state, action))
                     y.append([end_value])
-                elif session_y[index] - self.lbd > (1 - self.lbd)/2 and reward == 0:
+                elif session_y[index] - self.lbd > self.lbd * margin and reward == 0:
                     inputs.append(self.build_state_action(state, action))
                     y.append([self.lbd])
                 # elif end_value - self.lbd > (1 - self.lbd) / 2:
                 #     end_value = self.lbd
                 #     inputs.append(self.build_state_action(end_state, end_action))
                 #     y.append([end_value])
-                elif reward == 1 and (session_y[index] * self.lbd - 1) > (1 - self.lbd)/2:
+                elif reward == 1 and (session_y[index] - 1) > margin:
                     inputs.append(self.build_state_action(state, action))
                     y.append([1])
 
