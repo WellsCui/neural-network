@@ -13,10 +13,10 @@ class CompetingAgent(interfaces.IAgent):
         self.side = side
         self.value_net_learning_rate = initial_learning_rate
         self.policy_net_learning_rate = initial_learning_rate
-        self.minimum_learning_rate = 0.0002
+        self.minimum_learning_rate = 0.0004
         self.learning_rate_dacade_rate = 0.6
-        self.policy = game.wuziqi_policy_net.WuziqiPolicyNet(board_size, initial_learning_rate, lbd)
-        self.qnet = game.wuziqi_value_net.WuziqiQValueNet(board_size, initial_learning_rate, lbd)
+        self.policy = game.wuziqi_policy_net.WuziqiPolicyNet(name + "_", board_size, initial_learning_rate, lbd)
+        self.qnet = game.wuziqi_value_net.WuziqiQValueNet(name + "_", board_size, initial_learning_rate, lbd)
         self.mode = "online_learning."
         self.lbd = lbd
         self.search_depth = 20
@@ -228,10 +228,13 @@ class CompetingAgent(interfaces.IAgent):
 
         def get_action_from_policy(policy, environment, last_action):
             neighbor_actions = self.get_neighbor_actions(environment, last_action)
-            policy_actions = policy.suggest(environment.get_state(), self.side, 1)
-            return get_partial_random_action(policy_actions + neighbor_actions)
-
-        p = get_possibilities()
+            policy_actions = policy.suggest(environment.get_state(), self.side, 10)
+            if len(neighbor_actions) == 0:
+                return np.random.choice(policy_actions)
+            elif np.random.choice(2, p=[self.greedy_rate, 1 - self.greedy_rate]) == 0:
+                return np.random.choice(policy_actions)
+            else:
+                return np.random.choice(neighbor_actions)
 
         history1 = []
         history2 = []

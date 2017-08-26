@@ -183,7 +183,8 @@ def learn_from_experience(player: competing_agent.CompetingAgent, history, oppon
     session = history, reverse_history(opponent_history), final_result
     player.learn_value_net_from_session(session)
 
-def run_with_agents(times, player1: interfaces.IAgent, player2: interfaces.IAgent, learn_from_opponent=False):
+def run_with_agents(times, player1: interfaces.IAgent, player2: interfaces.IAgent,
+                    learn_from_opponent=False, saving_model=True):
 
     def move(player, game):
         state = game.get_state().copy()
@@ -250,18 +251,17 @@ def run_with_agents(times, player1: interfaces.IAgent, player2: interfaces.IAgen
         else:
             winner = "nobody"
         print("Winner is", winner)
-        player1.save("/tmp/player1")
+        if saving_model:
+            player1.save("/tmp/player1")
         # player1.save("/tmp/player2")
-
-
 
 def run_competing_agent(times, train_all_after, restored):
     board_size = (11, 11)
-    player1 = competing_agent.CompetingAgent("player1", board_size, 0.005, 1, 0.985)
-    player2 = competing_agent.CompetingAgent("player2", board_size, 0.005, -1, 0.985)
+    player1 = competing_agent.CompetingAgent("player1", board_size, 0.0005, 1, 0.99)
+    player2 = competing_agent.CompetingAgent("player2", board_size, 0.0005, -1, 0.99)
     human_player = human_agent.HumanAgent("human", -1)
-    player1.save("/tmp/player1")
     player1.restore("/tmp/player1")
+    # player2.restore("/tmp/player1")
 
     player1.is_greedy = True
     player2.is_greedy = True
@@ -269,7 +269,7 @@ def run_competing_agent(times, train_all_after, restored):
     #     player1.restore("/tmp/player1")
     #     player1.restore("/tmp/player2")
 
-    run_with_agents(10, player1, human_player, True)
+    run_with_agents(10, player1, human_player, True, True)
 
     run_with_agents(times, player1, player2)
         # player1.save("/tmp/player1")
@@ -277,7 +277,6 @@ def run_competing_agent(times, train_all_after, restored):
 
 
 run_competing_agent(1000, 200, False)
-
 
 # train_evaluator(1000, 100)
 #run_actor_critic_agent(10)

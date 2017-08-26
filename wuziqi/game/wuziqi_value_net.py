@@ -9,8 +9,8 @@ from tensorflow.contrib import learn
 
 
 class WuziqiQValueNet(interfaces.IActionEvaluator):
-    def __init__(self, board_size, learning_rate, lbd):
-
+    def __init__(self, name, board_size, learning_rate, lbd):
+        self.name = name
         self.board_size = board_size
         self.learning_rate = learning_rate
         # Input Layer
@@ -30,8 +30,9 @@ class WuziqiQValueNet(interfaces.IActionEvaluator):
 
         input_layer = tf.reshape(
             self.state_actions, [-1, board_size[0], board_size[1], 2],
-            name="input_layer")
+            name=name + "value_net_input_layer")
         conv1 = tf.layers.conv2d(
+            name=name + "value_net_conv1",
             inputs=input_layer,
             filters=96,
             kernel_size=self.kernel_size1,
@@ -44,6 +45,7 @@ class WuziqiQValueNet(interfaces.IActionEvaluator):
         #     strides=1)
 
         conv2 = tf.layers.conv2d(
+            name=name + "value_net_conv2",
             inputs=conv1,
             filters=128,
             kernel_size=self.kernel_size1,
@@ -56,6 +58,7 @@ class WuziqiQValueNet(interfaces.IActionEvaluator):
         #     strides=1)
 
         conv3 = tf.layers.conv2d(
+            name=name + "value_net_conv3",
             inputs=conv2,
             filters=128,
             kernel_size=self.kernel_size1,
@@ -63,11 +66,13 @@ class WuziqiQValueNet(interfaces.IActionEvaluator):
             activation=tf.nn.relu)
 
         pool3 = tf.layers.max_pooling2d(
+            name=name + "value_net_pool3",
             inputs=conv3,
             pool_size=self.pool_size,
             strides=1)
 
         conv4 = tf.layers.conv2d(
+            name=name + "value_net_conv4",
             inputs=pool3,
             filters=256,
             kernel_size=self.kernel_size2,
@@ -75,6 +80,7 @@ class WuziqiQValueNet(interfaces.IActionEvaluator):
             activation=tf.nn.relu)
 
         conv5 = tf.layers.conv2d(
+            name=name + "value_net_conv5",
             inputs=conv4,
             filters=256,
             kernel_size=self.kernel_size2,
@@ -82,11 +88,13 @@ class WuziqiQValueNet(interfaces.IActionEvaluator):
             activation=tf.nn.relu)
 
         pool5 = tf.layers.max_pooling2d(
+            name=name + "value_net_pool5",
             inputs=conv5,
             pool_size=self.pool_size,
             strides=1)
 
         conv6 = tf.layers.conv2d(
+            name=name + "value_net_conv6",
             inputs=pool5,
             filters=512,
             kernel_size=self.kernel_size3,
@@ -94,6 +102,7 @@ class WuziqiQValueNet(interfaces.IActionEvaluator):
             activation=tf.nn.relu)
 
         conv7 = tf.layers.conv2d(
+            name=name + "value_net_conv7",
             inputs=conv6,
             filters=512,
             kernel_size=self.kernel_size3,
@@ -105,14 +114,15 @@ class WuziqiQValueNet(interfaces.IActionEvaluator):
         #
         # flat_size = w * h * 512
         flat_size = 2048
-        pool_flat = tf.reshape(conv7, [-1, flat_size])
+        pool_flat = tf.reshape(conv7, [-1, flat_size], name=name + "value_net_pool_flat")
         dropout = tf.layers.dropout(
+            name=name + "value_net_dropout",
             inputs=pool_flat, rate=0.5, training=self.mode == learn.ModeKeys.TRAIN)
         dense = tf.layers.dense(
-            inputs=dropout, units=2048, activation=tf.nn.relu)
+            inputs=dropout, units=2048, activation=tf.nn.relu, name=name + "value_net_dense")
 
         self.pred = tf.layers.dense(
-            inputs=dense, units=1)
+            inputs=dense, units=1, name=name + "value_net_pred")
 
         # Mean squared error
         # loss = tf.reduce_sum(tf.pow(self.pred - self.y, 2)) / (2 * batch_size)
@@ -216,7 +226,7 @@ class WuziqiQValueNet(interfaces.IActionEvaluator):
         if loss < 0.00005:
             return loss
 
-        eval_epic(-1, loss)
+        # eval_epic(-1, loss)
 
         optimizer = tf.train.GradientDescentOptimizer(learning_rate).minimize(self.loss)
         for i in range(self.training_epics):
@@ -299,10 +309,10 @@ class WuziqiQValueNet(interfaces.IActionEvaluator):
         return np.array(inputs), np.array(y)
 
     def save(self, save_path):
-        save_dir = save_path + "/qvalue_ckpts"
-        if not os.path.exists(save_dir):
-            os.makedirs(save_dir)
-        return self.saver.save(self.sess, save_dir)
+        save_file = save_path + "/qvalue_ckpts"
+        if not os.path.exists(save_path):
+            os.makedirs(save_path)
+        return self.saver.save(self.sess, save_file)
 
     def restore(self, save_path):
         return self.saver.restore(self.sess, save_path + "/qvalue_ckpts")

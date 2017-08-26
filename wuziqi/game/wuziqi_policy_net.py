@@ -6,7 +6,8 @@ import tensorflow as tf
 from tensorflow.contrib import learn
 
 class WuziqiPolicyNet(interfaces.IPolicy):
-    def __init__(self, board_size, learning_rate, lbd):
+    def __init__(self, name, board_size, learning_rate, lbd):
+        self.name = name
         self.board_size = board_size
         self.learning_rate = learning_rate
         # Input Layer
@@ -24,9 +25,10 @@ class WuziqiPolicyNet(interfaces.IPolicy):
         self.maximum_training_size = 2000
 
         input_layer = tf.reshape(
-            self.state, [-1, board_size[0], board_size[1], 1], name="policy_input_layer")
+            self.state, [-1, board_size[0], board_size[1], 1], name=name+"policy_input_layer")
 
         conv1 = tf.layers.conv2d(
+            name=name+"policy_conv1",
             inputs=input_layer,
             filters=96,
             kernel_size=self.kernel_size1,
@@ -39,6 +41,7 @@ class WuziqiPolicyNet(interfaces.IPolicy):
         #     strides=1)
 
         conv2 = tf.layers.conv2d(
+            name=name+"policy_conv2",
             inputs=conv1,
             filters=128,
             kernel_size=self.kernel_size1,
@@ -51,6 +54,7 @@ class WuziqiPolicyNet(interfaces.IPolicy):
         #     strides=1)
 
         conv3 = tf.layers.conv2d(
+            name=name+"policy_conv3",
             inputs=conv2,
             filters=128,
             kernel_size=self.kernel_size1,
@@ -58,11 +62,13 @@ class WuziqiPolicyNet(interfaces.IPolicy):
             activation=tf.nn.relu)
 
         pool3 = tf.layers.max_pooling2d(
+            name=name+"policy_pool3",
             inputs=conv3,
             pool_size=self.pool_size,
             strides=1)
 
         conv4 = tf.layers.conv2d(
+            name=name+"policy_conv4",
             inputs=pool3,
             filters=256,
             kernel_size=self.kernel_size2,
@@ -70,6 +76,7 @@ class WuziqiPolicyNet(interfaces.IPolicy):
             activation=tf.nn.relu)
 
         conv5 = tf.layers.conv2d(
+            name=name+"policy_conv5",
             inputs=conv4,
             filters=256,
             kernel_size=self.kernel_size2,
@@ -77,11 +84,13 @@ class WuziqiPolicyNet(interfaces.IPolicy):
             activation=tf.nn.relu)
 
         pool5 = tf.layers.max_pooling2d(
+            name=name+"policy_pool5",
             inputs=conv5,
             pool_size=self.pool_size,
             strides=1)
 
         conv6 = tf.layers.conv2d(
+            name=name+"policy_conv6",
             inputs=pool5,
             filters=512,
             kernel_size=self.kernel_size3,
@@ -89,6 +98,7 @@ class WuziqiPolicyNet(interfaces.IPolicy):
             activation=tf.nn.relu)
 
         conv7 = tf.layers.conv2d(
+            name=name+"policy_conv7",
             inputs=conv6,
             filters=512,
             kernel_size=self.kernel_size3,
@@ -100,26 +110,37 @@ class WuziqiPolicyNet(interfaces.IPolicy):
         #
         # flat_size = w * h * 512
         flat_size = 2048
-        pool_flat = tf.reshape(conv7, [-1, flat_size])
+        pool_flat = tf.reshape(conv7, [-1, flat_size], name=name+"policy_flat")
         dropout = tf.layers.dropout(
-            inputs=pool_flat, rate=0.1, training=self.mode == learn.ModeKeys.TRAIN)
+            name=name+"policy_dropout",
+            inputs=pool_flat,
+            rate=0.1,
+            training=self.mode == learn.ModeKeys.TRAIN)
         dense = tf.layers.dense(
-            inputs=dropout, units=2048, activation=tf.nn.relu)
+            name=name+"policy_dense",
+            inputs=dropout,
+            units=2048,
+            activation=tf.nn.relu)
 
-        self.scores = tf.layers.dense(inputs=dense, units=board_size[0] * board_size[1])
-        self.predictions = tf.argmax(self.scores, 1, name="predictions")
+        self.scores = tf.layers.dense(
+            name=name+"policy_scores",
+            inputs=dense, units=board_size[0] * board_size[1])
+        self.predictions = tf.argmax(self.scores, 1, name=name+"predictions")
 
         self.loss = tf.reduce_mean(
-            tf.nn.softmax_cross_entropy_with_logits(labels=self.y, logits=self.scores))
+            tf.nn.softmax_cross_entropy_with_logits(
+                name=name+"policy_cross_entropy",
+                labels=self.y, logits=self.scores),
+            name=name+"policy_loss")
 
-        y_index = tf.argmax(self.y, 1)
+        y_index = tf.argmax(self.y, 1, name=name+"policy_y_index" )
 
-        correct_predictions = tf.equal(self.predictions, y_index)
-        self.accuracy = tf.reduce_mean(tf.cast(correct_predictions, "float"), name="accuracy")
-        correct_predictions_in_top_5 = tf.nn.in_top_k(predictions=self.scores, targets=y_index, k=5)
-        correct_predictions_in_top_10 = tf.nn.in_top_k(predictions=self.scores, targets=y_index, k=10)
-        self.top_5_accuracy = tf.reduce_mean(tf.cast(correct_predictions_in_top_5, "float"))
-        self.top_10_accuracy = tf.reduce_mean(tf.cast(correct_predictions_in_top_10, "float"))
+        correct_predictions = tf.equal(self.predictions, y_index, name=name+"correct_predictions")
+        self.accuracy = tf.reduce_mean(tf.cast(correct_predictions, "float"), name=name+"accuracy")
+        correct_predictions_in_top_5 = tf.nn.in_top_k(predictions=self.scores, targets=y_index, k=5, name=name+"top_5_predictions")
+        correct_predictions_in_top_10 = tf.nn.in_top_k(predictions=self.scores, targets=y_index, k=10, name=name+"top_10_predictions")
+        self.top_5_accuracy = tf.reduce_mean(tf.cast(correct_predictions_in_top_5, "float", name=name+"top_5_accuracy"))
+        self.top_10_accuracy = tf.reduce_mean(tf.cast(correct_predictions_in_top_10, "float",name=name+"top_10_accuracy"))
 
         # Gradient descent
 
@@ -210,10 +231,10 @@ class WuziqiPolicyNet(interfaces.IPolicy):
         return [accuracy, top_5_accuracy, top_10_accuracy]
 
     def save(self, save_path):
-        save_dir = save_path + "/policy_ckpts"
-        if not os.path.exists(save_dir):
-            os.makedirs(save_dir)
-        return self.saver.save(self.sess, save_dir)
+        save_file = save_path + "/policy_ckpts"
+        if not os.path.exists(save_path):
+            os.makedirs(save_path)
+        return self.saver.save(self.sess, save_file)
 
     def restore(self, save_path):
         return self.saver.restore(self.sess, save_path + "/policy_ckpts")
