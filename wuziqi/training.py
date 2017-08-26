@@ -7,6 +7,7 @@ import game.actor_critic_agent as ac_agent
 import game.competing_agent as competing_agent
 import game.human_agent as human_agent
 import game.interfaces as interfaces
+import os
 
 
 def play(times):
@@ -252,22 +253,23 @@ def run_with_agents(times, player1: interfaces.IAgent, player2: interfaces.IAgen
             winner = "nobody"
         print("Winner is", winner)
         if saving_model:
+            print("Saving player1 model...")
             player1.save("/tmp/player1")
         # player1.save("/tmp/player2")
 
-def run_competing_agent(times, train_all_after, restored):
+def run_competing_agent(times):
     board_size = (11, 11)
     player1 = competing_agent.CompetingAgent("player1", board_size, 0.0005, 1, 0.99)
     player2 = competing_agent.CompetingAgent("player2", board_size, 0.0005, -1, 0.99)
     human_player = human_agent.HumanAgent("human", -1)
-    player1.restore("/tmp/player1")
+    save_path = "/tmp/player1"
+    if os.path.exists(save_path):
+        print("Loading model...")
+        player1.restore(save_path)
     # player2.restore("/tmp/player1")
 
     player1.is_greedy = True
     player2.is_greedy = True
-    # if restored:
-    #     player1.restore("/tmp/player1")
-    #     player1.restore("/tmp/player2")
 
     run_with_agents(10, player1, human_player, True, True)
 
@@ -276,7 +278,7 @@ def run_competing_agent(times, train_all_after, restored):
         # player1.save("/tmp/player2")
 
 
-run_competing_agent(1000, 200, False)
+run_competing_agent(1000)
 
 # train_evaluator(1000, 100)
 #run_actor_critic_agent(10)

@@ -19,7 +19,7 @@ class CompetingAgent(interfaces.IAgent):
         self.qnet = game.wuziqi_value_net.WuziqiQValueNet(name + "_", board_size, initial_learning_rate, lbd)
         self.mode = "online_learning."
         self.lbd = lbd
-        self.search_depth = 20
+        self.search_depth = 10
         self.search_width = 20
         self.policy_training_data = []
         self.value_net_training_data = []

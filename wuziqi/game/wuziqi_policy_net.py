@@ -147,6 +147,7 @@ class WuziqiPolicyNet(interfaces.IPolicy):
         # self.optimizer = tf.train.GradientDescentOptimizer(self.learning_rate).minimize(self.loss)
         # print("trainable_variables:", tf.trainable_variables())
         self.saver = tf.train.Saver()
+        self.optimizer = tf.train.AdamOptimizer(learning_rate).minimize(self.loss)
         self.sess = tf.Session()
         self.sess.run(tf.global_variables_initializer())
         self.sess.run(tf.local_variables_initializer())
@@ -168,7 +169,7 @@ class WuziqiPolicyNet(interfaces.IPolicy):
             if is_pos_available(index[0], index[1]):
                 actions.append(wuziqi.WuziqiAction(index[0], index[1], side))
                 count -= 1
-            reshaped_pred[index] = -1
+            reshaped_pred[index] = -100
         return actions
 
     def apply_gradient(self, current_state, current_action, q_value):
@@ -200,7 +201,6 @@ class WuziqiPolicyNet(interfaces.IPolicy):
 
     def train(self, learning_rate, data):
 
-        optimizer = tf.train.GradientDescentOptimizer(learning_rate).minimize(self.loss)
         states = np.array([s for s, _ in data])
         state_shape = np.shape(states)
         y = np.zeros((state_shape[0], self.board_size[0], self.board_size[1]), dtype=np.int)
@@ -213,7 +213,7 @@ class WuziqiPolicyNet(interfaces.IPolicy):
 
         states, y = self.merge_with_cached_training_data([states, y])
 
-        print("Policy-Net learning rate: %f training size %s" % (learning_rate, y.shape))
+        print("Policy-Net learning rate: %f training size %s" % (self.learning_rate, y.shape))
 
         accuracy, top_5_accuracy, top_10_accuracy = [0, 0, 0]
 
@@ -221,7 +221,7 @@ class WuziqiPolicyNet(interfaces.IPolicy):
             accuracy, top_5_accuracy, top_10_accuracy, _ = self.sess.run([self.accuracy,
                                                                           self.top_5_accuracy,
                                                                           self.top_10_accuracy,
-                                                                          optimizer],
+                                                                          self.optimizer],
                                                                          {self.state: states,
                                                                           self.y: y,
                                                                           self.mode: learn.ModeKeys.TRAIN})
