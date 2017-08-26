@@ -125,6 +125,7 @@ class WuziqiPolicyNet(interfaces.IPolicy):
 
         # self.optimizer = tf.train.GradientDescentOptimizer(self.learning_rate).minimize(self.loss)
         # print("trainable_variables:", tf.trainable_variables())
+        self.saver = tf.train.Saver()
         self.sess = tf.Session()
         self.sess.run(tf.global_variables_initializer())
         self.sess.run(tf.local_variables_initializer())
@@ -209,12 +210,10 @@ class WuziqiPolicyNet(interfaces.IPolicy):
         return [accuracy, top_5_accuracy, top_10_accuracy]
 
     def save(self, save_path):
-        saver = tf.train.Saver()
         save_dir = save_path + "/policy_ckpts"
         if not os.path.exists(save_dir):
             os.makedirs(save_dir)
-        return saver.save(self.sess, save_dir)
+        return self.saver.save(self.sess, save_dir)
 
     def restore(self, save_path):
-        saver = tf.train.Saver()
-        return saver.restore(self.sess, save_path + "/policy_ckpts")
+        return self.saver.restore(self.sess, save_path + "/policy_ckpts")

@@ -104,7 +104,7 @@ class WuziqiEvaluator(interfaces.IEvaluator, interfaces.IModel):
         x_train = data[:-1]
         train_size = np.shape(x_train)[0]
         y_train = np.zeros((train_size, 1))
-        r = wuziqi.WuziqiGame.eval_state(self.board_size, data[-1]) * self.side
+        r = wuziqi.WuziqiGame.snapshot(self.board_size, data[-1], None).eval_state() * self.side
         target = r
         for i in range(train_size):
             y_train[i] = (1 - self.lbd) * target
@@ -119,7 +119,7 @@ class WuziqiEvaluator(interfaces.IEvaluator, interfaces.IModel):
         y_train = np.zeros((train_size, 1))
 
         for i in range(train_size):
-            reward = wuziqi.WuziqiGame.eval_state(self.board_size, data[-1]) * self.side
+            reward = wuziqi.WuziqiGame.snapshot(self.board_size, data[-1], None).eval_state() * self.side
             y_train[i] = reward + self.lbd * (self.predict(data[i + 1])[0])
 
         return x_train, y_train
@@ -134,7 +134,7 @@ class WuziqiEvaluator(interfaces.IEvaluator, interfaces.IModel):
 
         for i in range(train_size):
             trace = self.r * self.lbd * trace + one.dot(np.reshape(x_train[i], (bz, 1)))
-            reward = wuziqi.WuziqiGame.eval_state(self.board_size, data[-1]) * self.side
+            reward = wuziqi.WuziqiGame.snapshot(self.board_size, data[-1], None).eval_state() * self.side
             predicts = self.predict(data[i:i + 2])
             delta = reward + self.lbd * predicts[1] - predicts[0]
             y_train[i] = predicts[0] + delta * trace

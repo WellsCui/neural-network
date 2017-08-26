@@ -121,16 +121,22 @@ class WuziqiQValueNet(interfaces.IActionEvaluator):
         # Gradient descent
 
         # self.optimizer = tf.train.GradientDescentOptimizer(self.learning_rate).minimize(self.loss)
-        init = tf.global_variables_initializer()
-
-        self.trainable_variables = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='QValueNet')
+        # self.trainable_variables = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='QValueNet')
 
         # print("trainable_variables:", tf.trainable_variables())
+        self.saver = tf.train.Saver()
         self.sess = tf.Session()
-        self.sess.run(init)
+        self.sess.run(tf.global_variables_initializer())
+        self.sess.run(tf.local_variables_initializer())
 
     def evaluate(self, state, action):
         return self.sess.run(self.pred, {self.state_actions: self.build_state_action(state, action),
+                                         self.mode: learn.ModeKeys.EVAL})[0, 0]
+
+    def batch_evaluate(self, state_actions):
+        inputs = [self.build_state_action(state, action) for state, action in state_actions]
+
+        return self.sess.run(self.pred, {self.state_actions: inputs,
                                          self.mode: learn.ModeKeys.EVAL})[0, 0]
 
     def suggest(self, environment, candidate_actions, suggest_count=1):
@@ -210,13 +216,15 @@ class WuziqiQValueNet(interfaces.IActionEvaluator):
         if loss < 0.00005:
             return loss
 
+        eval_epic(-1, loss)
+
         optimizer = tf.train.GradientDescentOptimizer(learning_rate).minimize(self.loss)
         for i in range(self.training_epics):
             loss, _ = self.sess.run([self.loss, optimizer],
                                     {self.state_actions: state_actions,
                                      self.y: y,
                                      self.mode: learn.ModeKeys.TRAIN})
-            if (i + 1) % 25 == 0 or i == 0:
+            if (i + 1) % 50 == 0 or i == 0:
                 eval_epic(i, loss)
 
         self.recall_training_data(state_actions, y)
@@ -291,13 +299,11 @@ class WuziqiQValueNet(interfaces.IActionEvaluator):
         return np.array(inputs), np.array(y)
 
     def save(self, save_path):
-        saver = tf.train.Saver()
         save_dir = save_path + "/qvalue_ckpts"
         if not os.path.exists(save_dir):
             os.makedirs(save_dir)
-        return saver.save(self.sess, save_dir + "/qvalue_ckpts")
+        return self.saver.save(self.sess, save_dir)
 
     def restore(self, save_path):
-        saver = tf.train.Saver()
-        return saver.restore(self.sess, save_path + "/qvalue_ckpts")
+        return self.saver.restore(self.sess, save_path + "/qvalue_ckpts")
 

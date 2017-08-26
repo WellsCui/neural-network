@@ -45,6 +45,13 @@ class WuziqiGame(game.interfaces.IEnvironment):
         return actions
 
     @staticmethod
+    def snapshot(board_size, state, last_action):
+        game = WuziqiGame(board_size)
+        game.state = state.copy()
+        game.last_action = last_action
+        return game
+
+    @staticmethod
     def eval_row(row):
         last_val = 0
         repeat_count = 0
@@ -78,24 +85,23 @@ class WuziqiGame(game.interfaces.IEnvironment):
             rows.append(WuziqiGame.get_diagonal_row(state, 0, y, board_size[0] - y, board_size[1], 1, 1))
         return rows
 
-    @staticmethod
-    def eval_state(board_size, state):
-        for x in range(board_size[0]):
-            val1 = WuziqiGame.eval_row(state[x, :])
+    def eval_state(self):
+        for x in range(self.board_size[0]):
+            val1 = WuziqiGame.eval_row(self.state[x, :])
             if val1 in WuziqiGame.SIDES:
                 return val1
-        for y in range(board_size[1]):
-            val2 = WuziqiGame.eval_row(state[:, y])
+        for y in range(self.board_size[1]):
+            val2 = WuziqiGame.eval_row(self.state[:, y])
             if val2 in WuziqiGame.SIDES:
                 return val2
-        for row in WuziqiGame.get_diagonal_rows(board_size, state):
+        for row in WuziqiGame.get_diagonal_rows(self.board_size, self.state):
             val3 = WuziqiGame.eval_row(row)
             if val3 in WuziqiGame.SIDES:
                 return val3
         return 0
 
     def is_ended(self):
-        return self.eval_state(self.board_size, self.state) != 0 or len(self.get_available_points()[0]) == 0
+        return self.eval_state() != 0 or len(self.get_available_points()[0]) == 0
 
     def show(self):
         condlist = [self.state == 1, self.state == 0, self.state == -1]

@@ -5,6 +5,8 @@ import numpy as np
 import time
 import game.actor_critic_agent as ac_agent
 import game.competing_agent as competing_agent
+import game.human_agent as human_agent
+import game.interfaces as interfaces
 
 
 def play(times):
@@ -34,7 +36,7 @@ def play(times):
                 print("game ended after player2 toke action:", action.x, action.y)
                 break
         print("Game is ended on step:", step)
-        val = wuziqi.WuziqiGame.eval_state(game.board_size, game.state)
+        val = game.eval_state()
         if val == 1:
             winner = "player1"
         elif val == -1:
@@ -81,7 +83,7 @@ def train_evaluator(game_times, validate_times):
                 evaluator.train(games)
                 games.clear()
             if i % 20 == 0 or i % 23 == 0:
-                val = wuziqi.WuziqiGame.eval_state(game.board_size, game.state)
+                val = game.eval_state()
                 if val == 1:
                     winner = "player1"
                 elif val == -1:
@@ -92,7 +94,7 @@ def train_evaluator(game_times, validate_times):
                 print(" winner is", winner, "predict without training:", preds)
 
         else:
-            val = wuziqi.WuziqiGame.eval_state(game.board_size, game.state)
+            val = game.eval_state()
             if val == 1:
                 winner = "player1"
             elif val == -1:
@@ -119,7 +121,7 @@ def train_evaluator(game_times, validate_times):
 
 
 def get_reward(game):
-    return wuziqi.WuziqiGame.eval_state(game.board_size, game.get_state())
+    return game.eval_state()
 
 
 def run_actor_critic_agent(times):
@@ -160,7 +162,7 @@ def run_actor_critic_agent(times):
             current_state = next_state
 
         print("Game is ended on step:", step)
-        val = wuziqi.WuziqiGame.eval_state(game.board_size, game.state)
+        val = game.eval_state()
         if val == 1:
             wins += 1
             winner = "player1 " + str(wins) + " out of " + str(i+1)
@@ -173,29 +175,44 @@ def run_actor_critic_agent(times):
         # game.show()
 
 
-def run_competing_agent(times, train_all_after, restored):
-    board_size = (11, 11)
-    player1 = competing_agent.CompetingAgent("player1", board_size, 0.005, 1, 0.985)
-    player2 = competing_agent.CompetingAgent("player2", board_size, 0.005, -1, 0.985)
+def reverse_history(history):
+    return [[state * -1, action.reverse(), reward] for state, action, reward in history]
 
-    player1.is_greedy = True
-    player2.is_greedy = True
-    # if restored:
-    #     player1.restore("/tmp/player1")
-    #     player1.restore("/tmp/player2")
 
-    wins = 0
+def learn_from_experience(player: competing_agent.CompetingAgent, history, opponent_history, final_result):
+    session = history, reverse_history(opponent_history), final_result
+    player.learn_value_net_from_session(session)
 
-    # train_all_after = 1
+def run_with_agents(times, player1: interfaces.IAgent, player2: interfaces.IAgent, learn_from_opponent=False):
 
     def move(player, game):
+        state = game.get_state().copy()
         action = player.act(game)
+        is_ended = game.is_ended()
+        if is_ended:
+            reward = game.eval_state() * player.side
+        else:
+            reward = 0
+        if player == player1:
+            history1.append([state, action, reward])
+        else:
+            history2.append([state, action, reward])
+        if is_ended:
+            end_state = game.get_state().copy()
+            history1.append([end_state, wuziqi.WuziqiAction(0, 0, 0), 0])
+            history2.append([end_state, wuziqi.WuziqiAction(0, 0, 0), 0])
+
         game.show()
-        return game.is_ended()
+        return is_ended
+
+    board_size = (11, 11)
+    wins = 0
 
     for i in range(times):
         print("Starting Game ", i)
         game = wuziqi.WuziqiGame(board_size)
+        history1 = []
+        history2 = []
         step = 0
         if i % 2 == 0:
             first_player = player1
@@ -206,8 +223,8 @@ def run_competing_agent(times, train_all_after, restored):
         # player1.is_greedy = i % 11 == 0
         # player2.is_greedy = i % 13 == 0
 
-        print("player1 greedy: ", player1.is_greedy)
-        print("player2 greedy: ", player2.is_greedy)
+        # print("player1 greedy: ", player1.is_greedy)
+        # print("player2 greedy: ", player2.is_greedy)
         while True:
             step += 1
             if move(first_player, game):
@@ -216,17 +233,45 @@ def run_competing_agent(times, train_all_after, restored):
                 break
 
         print("Game is ended on step:", step)
-        val = wuziqi.WuziqiGame.eval_state(game.board_size, game.state)
+        val = game.eval_state()
+
+        player1.learn_from_experience([history1, history2, player1.side * val], learn_from_opponent)
+        player2.learn_from_experience([history2, history1, player2.side * val], learn_from_opponent)
+
         if val == 1:
             wins += 1
             winner = "player1 " + str(wins) + " out of " + str(i+1)
-            player1.increase_greedy()
+            if player1 is competing_agent.CompetingAgent:
+                player1.increase_greedy()
         elif val == -1:
             winner = "player2 " + str(i+1 - wins) + " out of " + str(i+1)
-            player2.increase_greedy()
+            if player2 is competing_agent.CompetingAgent:
+                player2.increase_greedy()
         else:
             winner = "nobody"
         print("Winner is", winner)
+        player1.save("/tmp/player1")
+        # player1.save("/tmp/player2")
+
+
+
+def run_competing_agent(times, train_all_after, restored):
+    board_size = (11, 11)
+    player1 = competing_agent.CompetingAgent("player1", board_size, 0.005, 1, 0.985)
+    player2 = competing_agent.CompetingAgent("player2", board_size, 0.005, -1, 0.985)
+    human_player = human_agent.HumanAgent("human", -1)
+    player1.save("/tmp/player1")
+    player1.restore("/tmp/player1")
+
+    player1.is_greedy = True
+    player2.is_greedy = True
+    # if restored:
+    #     player1.restore("/tmp/player1")
+    #     player1.restore("/tmp/player2")
+
+    run_with_agents(10, player1, human_player, True)
+
+    run_with_agents(times, player1, player2)
         # player1.save("/tmp/player1")
         # player1.save("/tmp/player2")
 

@@ -21,6 +21,12 @@ class IAgent(metaclass=ABCMeta):
     def act(self, environment: IEnvironment):
         pass
 
+    @abstractmethod
+    def learn_from_experience(self, experience, learn_from_opponent=False):
+        pass
+
+
+
 class IEvaluator(metaclass=ABCMeta):
     @abstractmethod
     def evaluate(self, environment: IEnvironment):
