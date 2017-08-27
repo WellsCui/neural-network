@@ -227,14 +227,17 @@ class CompetingAgent(interfaces.IAgent):
                        np.ones((5, 1)) * top10_possibilities)).reshape((10,))
 
         def get_action_from_policy(policy, environment, last_action):
-            neighbor_actions = self.get_neighbor_actions(environment, last_action)
-            policy_actions = policy.suggest(environment.get_state(), self.side, 10)
-            if len(neighbor_actions) == 0:
-                return np.random.choice(policy_actions)
-            elif np.random.choice(2, p=[self.greedy_rate, 1 - self.greedy_rate]) == 0:
-                return np.random.choice(policy_actions)
+            if self.is_greedy:
+                return policy.suggest(environment.get_state(), self.side, 1)[0]
             else:
-                return np.random.choice(neighbor_actions)
+                neighbor_actions = self.get_neighbor_actions(environment, last_action)
+                policy_actions = policy.suggest(environment.get_state(), self.side, 10)
+                if len(neighbor_actions) == 0:
+                    return np.random.choice(policy_actions)
+                elif np.random.choice(2, p=[self.greedy_rate, 1 - self.greedy_rate]) == 0:
+                    return np.random.choice(policy_actions)
+                else:
+                    return np.random.choice(neighbor_actions)
 
         history1 = []
         history2 = []

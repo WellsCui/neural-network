@@ -159,7 +159,8 @@ class WuziqiPolicyNet(interfaces.IPolicy):
         filled_pos = np.where(state != 0)
 
         actions = []
-        reshaped_pred[filled_pos] = -1
+        min_val = np.amin(reshaped_pred) -1
+        reshaped_pred[filled_pos] = min_val
 
         def is_pos_available(x, y):
             return state[x, y] == 0
@@ -169,7 +170,7 @@ class WuziqiPolicyNet(interfaces.IPolicy):
             if is_pos_available(index[0], index[1]):
                 actions.append(wuziqi.WuziqiAction(index[0], index[1], side))
                 count -= 1
-            reshaped_pred[index] = -100
+            reshaped_pred[index] = min_val
         return actions
 
     def apply_gradient(self, current_state, current_action, q_value):
