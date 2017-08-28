@@ -1,9 +1,12 @@
 import numpy as np
-import game.interfaces as interfaces
-import game.wuziqi as wuziqi
 import os
+import tables
 import tensorflow as tf
 from tensorflow.contrib import learn
+
+import game.interfaces as interfaces
+import game.wuziqi as wuziqi
+import game.utils
 
 class WuziqiPolicyNet(interfaces.IPolicy):
     def __init__(self, name, board_size, learning_rate, lbd):
@@ -23,6 +26,7 @@ class WuziqiPolicyNet(interfaces.IPolicy):
         self.training_epics = 100
         self.cached_training_data = None
         self.maximum_training_size = 2000
+        self.training_data_dir = '/tmp/player1/data'
 
         input_layer = tf.reshape(
             self.state, [-1, board_size[0], board_size[1], 1], name=name+"policy_input_layer")
@@ -114,7 +118,7 @@ class WuziqiPolicyNet(interfaces.IPolicy):
         dropout = tf.layers.dropout(
             name=name+"policy_dropout",
             inputs=pool_flat,
-            rate=0.1,
+            rate=0.5,
             training=self.mode == learn.ModeKeys.TRAIN)
         dense = tf.layers.dense(
             name=name+"policy_dense",
@@ -212,8 +216,13 @@ class WuziqiPolicyNet(interfaces.IPolicy):
 
         y = y.reshape((state_shape[0], self.board_size[0]*self.board_size[1]))
 
+        self.save_training_data([states, y])
+
         states, y = self.merge_with_cached_training_data([states, y])
 
+        return self.train_with_raw_data(states, y)
+
+    def train_with_raw_data(self, states, y):
         print("Policy-Net learning rate: %f training size %s" % (self.learning_rate, y.shape))
 
         accuracy, top_5_accuracy, top_10_accuracy = [0, 0, 0]
@@ -239,3 +248,27 @@ class WuziqiPolicyNet(interfaces.IPolicy):
 
     def restore(self, save_path):
         return self.saver.restore(self.sess, save_path + "/policy_ckpts")
+
+    def save_training_data(self, training_data):
+        train_file = self.training_data_dir + "/policy_train.h5"
+        if os.path.isfile(train_file):
+            f = tables.open_file(train_file, mode='a')
+            f.root.train_input.append(training_data[0])
+            f.root.train_output.append(training_data[1])
+        else:
+            f = tables.open_file(train_file, mode='w')
+            game.utils.create_earray(f, 'train_input', training_data[0])
+            game.utils.create_earray(f, 'train_output', training_data[1])
+        f.close()
+
+    def train_with_file(self):
+        train_file = self.training_data_dir + "/policy_train.h5"
+        if os.path.isfile(train_file):
+            f = tables.open_file(train_file)
+            inputs =np.array([x for x in f.root.train_input.iterrows()])
+            y = np.array([x for x in f.root.train_output.iterrows()])
+            f.close()
+            self.merge_with_cached_training_data([inputs, y])
+            return self.train_with_raw_data(inputs, y)
+        else:
+            return None

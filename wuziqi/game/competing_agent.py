@@ -19,8 +19,8 @@ class CompetingAgent(interfaces.IAgent):
         self.qnet = game.wuziqi_value_net.WuziqiQValueNet(name + "_", board_size, initial_learning_rate, lbd)
         self.mode = "online_learning."
         self.lbd = lbd
-        self.search_depth = 10
-        self.search_width = 20
+        self.search_depth = 20
+        self.search_width = 10
         self.policy_training_data = []
         self.value_net_training_data = []
         self.value_net_training_size = 50
@@ -295,3 +295,10 @@ class CompetingAgent(interfaces.IAgent):
         history, opponent_history, final_result = experience
         session = history, reverse_history(opponent_history), final_result
         self.learn_from_session(session, learn_from_opponent)
+
+    def train_model_with_raw_data(self, train_dir):
+        print('training model with raw data...')
+        self.policy.training_data_dir = train_dir
+        self.qnet.training_data_dir = train_dir
+        self.policy.train_with_file()
+        self.qnet.train_with_file()

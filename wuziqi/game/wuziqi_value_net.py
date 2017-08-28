@@ -1,11 +1,11 @@
-import random
 import numpy as np
-import game.interfaces as interfaces
-import game.wuziqi as wuziqi
-import game.utils
+
 import os
 import tensorflow as tf
 from tensorflow.contrib import learn
+import tables
+import game.interfaces as interfaces
+import game.utils
 
 
 class WuziqiQValueNet(interfaces.IActionEvaluator):
@@ -27,6 +27,7 @@ class WuziqiQValueNet(interfaces.IActionEvaluator):
         self.training_epics = 100
         self.minimum_training_size = 100
         self.cached_training_data = None
+        self.training_data_dir = '/tmp/player1/data'
 
         input_layer = tf.reshape(
             self.state_actions, [-1, board_size[0], board_size[1], 2],
@@ -203,14 +204,18 @@ class WuziqiQValueNet(interfaces.IActionEvaluator):
         self.cached_training_data = [state_actions[index], y[index]]
 
     def train(self, learning_rate, data):
-        train_data = self.merge_with_cached_training_data(self.build_td_training_data(data))
+        new_training_data = self.build_td_training_data(data)
+        self.save_training_data(new_training_data)
+        train_data = self.merge_with_cached_training_data(new_training_data)
 
         if train_data is None or train_data[1].shape[0] <= self.minimum_training_size:
             return 0
 
         state_actions, y = train_data
+        return self.train_with_raw_data(state_actions, y, learning_rate)
 
-        print("Value-Net learning rate: %f train_size: %d" % (learning_rate, train_data[1].shape[0]))
+    def train_with_raw_data(self, state_actions, y, learning_rate):
+        print("Value-Net learning rate: %f train_size: %d" % (learning_rate, state_actions.shape[0]))
 
         def eval_epic(epic, loss):
             print("epic %d: %f " % (epic, loss))
@@ -220,9 +225,9 @@ class WuziqiQValueNet(interfaces.IActionEvaluator):
             print(result)
 
         loss = self.sess.run(self.loss,
-                                {self.state_actions: state_actions,
-                                 self.y: y,
-                                 self.mode: learn.ModeKeys.TRAIN})
+                             {self.state_actions: state_actions,
+                              self.y: y,
+                              self.mode: learn.ModeKeys.TRAIN})
         if loss < 0.00005:
             return loss
 
@@ -240,6 +245,7 @@ class WuziqiQValueNet(interfaces.IActionEvaluator):
         self.recall_training_data(state_actions, y)
 
         return loss
+
 
     def build_td_0_training_data(self, data):
         inputs = None
@@ -316,4 +322,27 @@ class WuziqiQValueNet(interfaces.IActionEvaluator):
 
     def restore(self, save_path):
         return self.saver.restore(self.sess, save_path + "/qvalue_ckpts")
+
+    def save_training_data(self, train_data):
+        train_file = self.training_data_dir + "/value_net_train.h5"
+        if os.path.isfile(train_file):
+            f = tables.open_file(train_file, mode='a')
+            f.root.train_input.append(train_data[0])
+            f.root.train_output.append(train_data[1])
+        else:
+            f = tables.open_file(train_file, mode='w')
+            game.utils.create_earray(f, 'train_input', train_data[0])
+            game.utils.create_earray(f, 'train_output', train_data[1])
+        f.close()
+
+    def train_with_file(self):
+        train_file = self.training_data_dir + "/value_net_train.h5"
+        if os.path.isfile(train_file):
+            f = tables.open_file(train_file)
+            inputs = np.array([x for x in f.root.train_input.iterrows()])
+            y = np.array([x for x in f.root.train_output.iterrows()])
+            f.close()
+            return self.train_with_raw_data(inputs, y, self.learning_rate)
+        else:
+            return None
 
