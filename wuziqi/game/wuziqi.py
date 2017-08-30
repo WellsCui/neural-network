@@ -112,6 +112,8 @@ class WuziqiGame(game.interfaces.IEnvironment):
             print(' '.join(row))
 
         # np.apply_along_axis(print_row, 1, printable)
+
+        print(' ', ' '.join([str(col % 10) for col in range(15)]))
         for y in range(self.board_size[1]):
             row = []
             for x in range(self.board_size[0]):
@@ -127,7 +129,7 @@ class WuziqiGame(game.interfaces.IEnvironment):
                     row.append('O')
                 else:
                     row.append('-')
-            print(' '.join(row))
+            print((y % 10), ' '.join(row))
 
         print("#########")
 

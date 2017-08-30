@@ -22,7 +22,7 @@ class IAgent(metaclass=ABCMeta):
         pass
 
     @abstractmethod
-    def learn_from_experience(self, experience, learn_from_opponent=False):
+    def learn_from_experience(self, experience, learn_from_winner=False):
         pass
 
 

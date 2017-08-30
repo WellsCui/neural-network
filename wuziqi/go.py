@@ -7,7 +7,10 @@ import game.actor_critic_agent as ac_agent
 import game.competing_agent as competing_agent
 import game.human_agent as human_agent
 import game.interfaces as interfaces
+import training.bdt_game
+import training.psq_game
 import os
+import re
 
 
 def play(times):
@@ -184,8 +187,9 @@ def learn_from_experience(player: competing_agent.CompetingAgent, history, oppon
     session = history, reverse_history(opponent_history), final_result
     player.learn_value_net_from_session(session)
 
+
 def run_with_agents(times, player1: interfaces.IAgent, player2: interfaces.IAgent,
-                    learn_from_opponent=False, saving_model=True):
+                    model_path, saving_model=True, learn_from_winner=True):
 
     def move(player, game):
         state = game.get_state().copy()
@@ -207,7 +211,7 @@ def run_with_agents(times, player1: interfaces.IAgent, player2: interfaces.IAgen
         game.show()
         return is_ended
 
-    board_size = (11, 11)
+    board_size = player1.board_size
     wins = 0
 
     for i in range(times):
@@ -237,8 +241,8 @@ def run_with_agents(times, player1: interfaces.IAgent, player2: interfaces.IAgen
         print("Game is ended on step:", step)
         val = game.eval_state()
 
-        player1.learn_from_experience([history1, history2, player1.side * val], learn_from_opponent)
-        player2.learn_from_experience([history2, history1, player2.side * val], learn_from_opponent)
+        player1.learn_from_experience([history1, history2, player1.side * val], learn_from_winner)
+        player2.learn_from_experience([history2, history1, player2.side * val], learn_from_winner)
 
         if val == 1:
             wins += 1
@@ -254,32 +258,63 @@ def run_with_agents(times, player1: interfaces.IAgent, player2: interfaces.IAgen
         print("Winner is", winner)
         if saving_model:
             print("Saving player1 model...")
-            player1.save("/tmp/player1")
-        # player1.save("/tmp/player2")
+            player1.save(model_path)
+            # player1.save("/tmp/player2")
 
-def run_competing_agent(times):
-    board_size = (11, 11)
-    player1 = competing_agent.CompetingAgent("player1", board_size, 0.0005, 1, 0.99)
-    player2 = competing_agent.CompetingAgent("player2", board_size, 0.0005, -1, 0.99)
+
+def run_competing_agent(base_path, save_model):
+    board_size = (15, 15)
+    training_data_dir=os.path.join(base_path+"/data")
+    player1 = competing_agent.CompetingAgent("player1", board_size, 0.0005, 1, 0.99, training_data_dir)
+    player2 = competing_agent.CompetingAgent("player2", board_size, 0.0005, -1, 0.99, training_data_dir)
     human_player = human_agent.HumanAgent("human", -1)
-    save_path = "/tmp/player1"
-    if os.path.exists(save_path):
-        print("Loading model...")
-        player1.restore(save_path)
-    player1.train_model_with_raw_data('/tmp/player1/data')
-    # player2.restore("/tmp/player1")
-
+    model_path = os.path.join(base_path+"/model")
+    if os.path.isfile(os.path.join(model_path+'/checkpoint')):
+        print("Loading player1 model...")
+        player1.load_model(model_path)
+    player1.train_model_with_raw_data(training_data_dir)
+    # train_agent_with_games(player1, model_path)
+    player1.online_learning = True
     player1.is_greedy = True
     player2.is_greedy = True
-
-    run_with_agents(10, player1, human_player, True, True)
-
-    run_with_agents(times, player1, player2)
-        # player1.save("/tmp/player1")
-        # player1.save("/tmp/player2")
+    run_with_agents(10, player1, human_player, model_path, save_model, True)
+    run_with_agents(10, player1, player2, model_path, save_model, False)
 
 
-run_competing_agent(1000)
+def train_with_games(training_data_dir, model_dir):
+    board_size = (15, 15)
+    player1 = competing_agent.CompetingAgent("player1", board_size, 0.0005, 1, 0.99)
+    player1.qnet.training_data_dir = training_data_dir
+    player1.policy.training_data_dir = training_data_dir
+    train_agent_with_games(player1, training.bdt_game.get_sessions('data/gomocup-2016.bdt'), model_dir)
+
+
+def train_agent_with_games(agent: competing_agent.CompetingAgent, sessions, save_dir):
+    finished_sessions = (s for s in sessions if s[2] != 0)
+    # unfinished_sessions = [s for s in sessions if s[2] == 0]
+    # print("Training agent %s with %d finished sessions in %d session" % (agent.name, len(finished_sessions), len(sessions)))
+    i = 0
+
+    def train_with_sessions(train_sessions, session_id):
+        for session in train_sessions:
+            session_id += 1
+            print("Training agent %s with session: %d" % (agent.name, session_id))
+            if agent.learn_from_session(session, True):
+                print("Saving model...")
+                agent.save(save_dir)
+        return i
+
+    i = train_with_sessions(finished_sessions, 0)
+    # train_with_sessions(unfinished_sessions, i)
+
+
+# training.psq_game.replay_psq_games()
+# training.psq_game.convert_psq_files('../history/standard', 'data/gomocup-2016.bdt')
+# train_with_games("/output/data", "/output/player1")
+# train_with_games("../history/gomocup-2016/data", "../history/gomocup-2016/model")
+# training.bdt_game.replay_sessions()
+# replay_games()
+run_competing_agent("../history/gomocup-2016", False)
 
 # train_evaluator(1000, 100)
 #run_actor_critic_agent(10)

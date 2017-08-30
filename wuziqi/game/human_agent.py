@@ -18,5 +18,5 @@ class HumanAgent(interfaces.IAgent):
         environment.update(action)
         return action
 
-    def learn_from_experience(self, experience, learn_from_opponent):
+    def learn_from_experience(self, experience, learn_from_winner):
         pass

@@ -21,13 +21,13 @@ class WuziqiQValueNet(interfaces.IActionEvaluator):
         self.lbd = lbd
         self.r = 0.05
         self.kernel_size1 = [2, 2]
-        self.kernel_size2 = [2, 2]
-        self.kernel_size3 = [2, 2]
+        self.kernel_size2 = [3, 3]
+        self.kernel_size3 = [3, 3]
         self.pool_size = [2, 2]
         self.training_epics = 100
         self.minimum_training_size = 100
         self.cached_training_data = None
-        self.training_data_dir = '/tmp/player1/data'
+        self.training_data_dir = 'data'
 
         input_layer = tf.reshape(
             self.state_actions, [-1, board_size[0], board_size[1], 2],
@@ -40,82 +40,78 @@ class WuziqiQValueNet(interfaces.IActionEvaluator):
             # padding="same",
             activation=tf.nn.relu)
 
-        # pool1 = tf.layers.max_pooling2d(
-        #     inputs=conv1,
-        #     pool_size=self.pool_size,
-        #     strides=1)
-
         conv2 = tf.layers.conv2d(
             name=name + "value_net_conv2",
             inputs=conv1,
-            filters=128,
+            filters=96,
             kernel_size=self.kernel_size1,
             # padding="same",
             activation=tf.nn.relu)
 
-        # pool2 = tf.layers.max_pooling2d(
-        #     inputs=conv2,
-        #     pool_size=self.pool_size,
-        #     strides=1)
+        pool2 = tf.layers.max_pooling2d(
+            name=name + "value_net_pool2",
+            inputs=conv2,
+            pool_size=self.pool_size,
+            strides=1)
 
         conv3 = tf.layers.conv2d(
             name=name + "value_net_conv3",
-            inputs=conv2,
+            inputs=pool2,
             filters=128,
-            kernel_size=self.kernel_size1,
+            kernel_size=self.kernel_size2,
             # padding="same",
             activation=tf.nn.relu)
-
-        pool3 = tf.layers.max_pooling2d(
-            name=name + "value_net_pool3",
-            inputs=conv3,
-            pool_size=self.pool_size,
-            strides=1)
 
         conv4 = tf.layers.conv2d(
             name=name + "value_net_conv4",
-            inputs=pool3,
-            filters=256,
+            inputs=conv3,
+            filters=128,
             kernel_size=self.kernel_size2,
             # padding="same",
             activation=tf.nn.relu)
 
-        conv5 = tf.layers.conv2d(
-            name=name + "value_net_conv5",
+        pool4 = tf.layers.max_pooling2d(
+            name=name + "value_net_pool4",
             inputs=conv4,
-            filters=256,
-            kernel_size=self.kernel_size2,
-            # padding="same",
-            activation=tf.nn.relu)
-
-        pool5 = tf.layers.max_pooling2d(
-            name=name + "value_net_pool5",
-            inputs=conv5,
             pool_size=self.pool_size,
             strides=1)
 
+        conv5 = tf.layers.conv2d(
+            name=name + "value_net_conv5",
+            inputs=pool4,
+            filters=256,
+            kernel_size=self.kernel_size2,
+            # padding="same",
+            activation=tf.nn.relu)
+
         conv6 = tf.layers.conv2d(
             name=name + "value_net_conv6",
-            inputs=pool5,
+            inputs=conv5,
             filters=512,
             kernel_size=self.kernel_size3,
             # padding="same",
             activation=tf.nn.relu)
 
-        conv7 = tf.layers.conv2d(
-            name=name + "value_net_conv7",
+        pool6 = tf.layers.max_pooling2d(
+            name=name + "value_net_pool6",
             inputs=conv6,
-            filters=512,
-            kernel_size=self.kernel_size3,
-            # padding="same",
-            activation=tf.nn.relu)
+            pool_size=self.pool_size,
+            strides=1)
+
+        # conv7 = tf.layers.conv2d(
+        #     name=name + "value_net_conv7",
+        #     inputs=pool6,
+        #     filters=512,
+        #     kernel_size=self.kernel_size3,
+        #     # padding="same",
+        #     activation=tf.nn.relu)
 
         # w = board_size[0] - ((self.kernel_size1[0] - 1) + (self.kernel_size2[0] - 1)*1 + (self.pool_size[0] - 1)*3)
         # h = board_size[1] - ((self.kernel_size1[1] - 1) + (self.kernel_size2[1] - 1)*1 + (self.pool_size[1] - 1)*3)
         #
         # flat_size = w * h * 512
         flat_size = 2048
-        pool_flat = tf.reshape(conv7, [-1, flat_size], name=name + "value_net_pool_flat")
+        pool_flat = tf.reshape(pool6, [-1, flat_size], name=name + "value_net_pool_flat")
         dropout = tf.layers.dropout(
             name=name + "value_net_dropout",
             inputs=pool_flat, rate=0.5, training=self.mode == learn.ModeKeys.TRAIN)
@@ -136,6 +132,7 @@ class WuziqiQValueNet(interfaces.IActionEvaluator):
 
         # print("trainable_variables:", tf.trainable_variables())
         self.saver = tf.train.Saver()
+        self.optimizer = tf.train.AdamOptimizer(learning_rate, name="QNet_Optimizer").minimize(self.loss)
         self.sess = tf.Session()
         self.sess.run(tf.global_variables_initializer())
         self.sess.run(tf.local_variables_initializer())
@@ -195,17 +192,21 @@ class WuziqiQValueNet(interfaces.IActionEvaluator):
                 np.vstack((self.cached_training_data[1], training_data[1]))]
         return self.cached_training_data
 
-    def recall_training_data(self, state_actions, y):
-        predicted_y = self.lbd * self.sess.run(self.pred, {self.state_actions: state_actions,
-                                                           self.mode: learn.ModeKeys.EVAL})
+    def recall_training_data(self, state_actions, y, predicted_y):
+        # predicted_y = self.lbd * self.sess.run(self.pred, {self.state_actions: state_actions,
+        #                                                    self.mode: learn.ModeKeys.EVAL})
 
         index = np.where((y - predicted_y) > (y * (1 - self.lbd)/2))[0]
         print("recall records: %s in %s" % (index.shape[0], y.shape[0]))
         self.cached_training_data = [state_actions[index], y[index]]
 
+        # result = np.append(predicted_y[index], y[index], axis=1)
+        # print(result)
+
     def train(self, learning_rate, data):
         new_training_data = self.build_td_training_data(data)
-        self.save_training_data(new_training_data)
+        if new_training_data[1].shape[0] > 0:
+            self.save_training_data(new_training_data)
         train_data = self.merge_with_cached_training_data(new_training_data)
 
         if train_data is None or train_data[1].shape[0] <= self.minimum_training_size:
@@ -224,25 +225,25 @@ class WuziqiQValueNet(interfaces.IActionEvaluator):
             result = np.append(vals, np.reshape(y[0:20], vals.shape), axis=1)
             print(result)
 
-        loss = self.sess.run(self.loss,
-                             {self.state_actions: state_actions,
-                              self.y: y,
-                              self.mode: learn.ModeKeys.TRAIN})
-        if loss < 0.00005:
-            return loss
+        # loss = self.sess.run(self.loss,
+        #                      {self.state_actions: state_actions,
+        #                       self.y: y,
+        #                       self.mode: learn.ModeKeys.TRAIN})
+        # if loss < 0.00005:
+        #     return loss
 
         # eval_epic(-1, loss)
 
-        optimizer = tf.train.GradientDescentOptimizer(learning_rate).minimize(self.loss)
+        # optimizer = tf.train.GradientDescentOptimizer(learning_rate).minimize(self.loss)
         for i in range(self.training_epics):
-            loss, _ = self.sess.run([self.loss, optimizer],
-                                    {self.state_actions: state_actions,
+            pred, loss, _ = self.sess.run([self.pred, self.loss, self.optimizer],
+                                          {self.state_actions: state_actions,
                                      self.y: y,
                                      self.mode: learn.ModeKeys.TRAIN})
             if (i + 1) % 50 == 0 or i == 0:
                 eval_epic(i, loss)
 
-        self.recall_training_data(state_actions, y)
+        self.recall_training_data(state_actions, y, pred)
 
         return loss
 
@@ -283,13 +284,14 @@ class WuziqiQValueNet(interfaces.IActionEvaluator):
             end_state, end_action, end_reward = session[-1]
             end_value = 0
             if end_action.val != 0:
-                end_value = self.evaluate(end_state, end_action)
-                if end_value - self.lbd > margin:
-                    end_value = self.lbd
-                    inputs.append(self.build_state_action(end_state, end_action))
-                    y.append([end_value])
-                elif end_value < margin * 2:
-                    continue
+                continue
+                # end_value = self.evaluate(end_state, end_action)
+                # if end_value - self.lbd > margin:
+                #     end_value = self.lbd
+                #     inputs.append(self.build_state_action(end_state, end_action))
+                #     y.append([end_value])
+                # elif end_value < 0.5:
+                #     continue
 
             session_inputs = np.array([self.build_state_action(state, action) for state, action, _ in session])
             session_y = self.lbd * self.sess.run(self.pred, {self.state_actions: session_inputs[1:],
@@ -308,9 +310,9 @@ class WuziqiQValueNet(interfaces.IActionEvaluator):
                 #     end_value = self.lbd
                 #     inputs.append(self.build_state_action(end_state, end_action))
                 #     y.append([end_value])
-                elif reward == 1 and (session_y[index] - 1) > margin:
+                elif (session_y[index] - 1) > margin:
                     inputs.append(self.build_state_action(state, action))
-                    y.append([1])
+                    y.append([end_value])
 
         return np.array(inputs), np.array(y)
 
@@ -325,6 +327,8 @@ class WuziqiQValueNet(interfaces.IActionEvaluator):
 
     def save_training_data(self, train_data):
         train_file = self.training_data_dir + "/value_net_train.h5"
+        if not os.path.exists(self.training_data_dir):
+            os.makedirs(self.training_data_dir)
         if os.path.isfile(train_file):
             f = tables.open_file(train_file, mode='a')
             f.root.train_input.append(train_data[0])
@@ -342,6 +346,22 @@ class WuziqiQValueNet(interfaces.IActionEvaluator):
             inputs = np.array([x for x in f.root.train_input.iterrows()])
             y = np.array([x for x in f.root.train_output.iterrows()])
             f.close()
+            record_count = y.shape[0]
+            print("Training value net with %d records..." % record_count)
+            batch_size = 500
+            batch_count, remain = divmod(record_count, 500)
+            if remain > 0:
+                batch_count += 1
+            for batch in range(batch_count):
+                if batch == batch_count-1:
+                    self.train_with_raw_data(inputs[batch * batch_size:],
+                                             y[batch * batch_size:],
+                                             self.learning_rate)
+                else:
+                    self.train_with_raw_data(inputs[batch * batch_size: (batch+1) * batch_size],
+                                             y[batch * batch_size: (batch+1) * batch_size],
+                                             self.learning_rate)
+
             return self.train_with_raw_data(inputs, y, self.learning_rate)
         else:
             return None
