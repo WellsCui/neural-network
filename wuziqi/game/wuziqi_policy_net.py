@@ -218,7 +218,7 @@ class WuziqiPolicyNet(interfaces.IPolicy):
 
         return self.train_with_raw_data(states, y)
 
-    def train_with_raw_data(self, states, y):
+    def train_with_raw_data(self, states, y, log_epic=50):
         print("Policy-Net learning rate: %f training size %s" % (self.learning_rate, y.shape))
 
         accuracy, top_5_accuracy, top_10_accuracy = [0, 0, 0]
@@ -231,7 +231,7 @@ class WuziqiPolicyNet(interfaces.IPolicy):
                                                                          {self.state: states,
                                                                           self.y: y,
                                                                           self.mode: learn.ModeKeys.TRAIN})
-            if (i + 1) % 50 == 0 or i == 0:
+            if (i + 1) % log_epic == 0 or i == 0:
                 print("epic %d policy accuracy: %f top_5_accuracy: %f , top_10_accuracy: %f"
                       % (i, accuracy, top_5_accuracy, top_10_accuracy))
         return [accuracy, top_5_accuracy, top_10_accuracy]
@@ -269,6 +269,6 @@ class WuziqiPolicyNet(interfaces.IPolicy):
             record_count = y.shape[0]
             print("Training policy net with %d records..." % record_count)
             self.merge_with_cached_training_data([inputs, y])
-            return self.train_with_raw_data(inputs, y)
+            return self.train_with_raw_data(inputs, y, 5)
         else:
             return None

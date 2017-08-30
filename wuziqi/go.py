@@ -273,6 +273,7 @@ def run_competing_agent(base_path, save_model):
         print("Loading player1 model...")
         player1.load_model(model_path)
     player1.train_model_with_raw_data(training_data_dir)
+    player1.save(model_path)
     # train_agent_with_games(player1, model_path)
     player1.online_learning = True
     player1.is_greedy = True

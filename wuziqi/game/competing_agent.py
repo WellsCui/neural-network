@@ -246,8 +246,9 @@ class CompetingAgent(interfaces.IAgent):
         print('training model with raw data...')
         self.policy.training_data_dir = train_dir
         self.qnet.training_data_dir = train_dir
-        self.policy.train_with_file()
         self.qnet.train_with_file()
+        self.policy.train_with_file()
+
 
     def choose_best_action_from_rehearsals(self, rehearsals, reversed_rehearsals):
         rs = rehearsals+reversed_rehearsals
@@ -285,24 +286,24 @@ class CompetingAgent(interfaces.IAgent):
     def learn_policy_net_from_session(self, session, learn_from_winner=False):
         history, opponent_history, final_state = session
         if final_state == 1:
+            winning_state, winning_action, _ = history[-2]
             if learn_from_winner:
                 for s, a, r in history[:-1]:
                     self.policy_training_data.append([s, a])
             else:
-                winning_state, winning_action, _ = history[-2]
                 self.policy_training_data.append([winning_state, winning_action])
-                if len(opponent_history) > 1:
-                    failing_state, failing_action, _ = opponent_history[-2]
-                    self.policy_training_data.append([failing_state, winning_action])
+            if len(opponent_history) > 1:
+                failing_state, failing_action, _ = opponent_history[-2]
+                self.policy_training_data.append([failing_state, winning_action])
         elif final_state == -1:
+            winning_state, winning_action, _ = opponent_history[-2]
             if learn_from_winner:
                 for s, a, r in opponent_history[:-1]:
                     self.policy_training_data.append([s, a])
             else:
-                winning_state, winning_action, _ = opponent_history[-2]
                 self.policy_training_data.append([winning_state, winning_action])
-                failing_state, failing_action, _ = history[-2]
-                self.policy_training_data.append([failing_state, winning_action])
+            failing_state, failing_action, _ = history[-2]
+            self.policy_training_data.append([failing_state, winning_action])
 
         if len(self.policy_training_data) > self.policy_training_size:
             self.policy_accuracy = self.policy.train(self.policy_net_learning_rate, self.policy_training_data)

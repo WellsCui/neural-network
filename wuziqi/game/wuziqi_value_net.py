@@ -215,7 +215,7 @@ class WuziqiQValueNet(interfaces.IActionEvaluator):
         state_actions, y = train_data
         return self.train_with_raw_data(state_actions, y, learning_rate)
 
-    def train_with_raw_data(self, state_actions, y, learning_rate):
+    def train_with_raw_data(self, state_actions, y, learning_rate, log_epic=50):
         print("Value-Net learning rate: %f train_size: %d" % (learning_rate, state_actions.shape[0]))
 
         def eval_epic(epic, loss):
@@ -240,7 +240,7 @@ class WuziqiQValueNet(interfaces.IActionEvaluator):
                                           {self.state_actions: state_actions,
                                      self.y: y,
                                      self.mode: learn.ModeKeys.TRAIN})
-            if (i + 1) % 50 == 0 or i == 0:
+            if (i + 1) % log_epic == 0 or i == 0:
                 eval_epic(i, loss)
 
         self.recall_training_data(state_actions, y, pred)
@@ -356,13 +356,10 @@ class WuziqiQValueNet(interfaces.IActionEvaluator):
                 if batch == batch_count-1:
                     self.train_with_raw_data(inputs[batch * batch_size:],
                                              y[batch * batch_size:],
-                                             self.learning_rate)
+                                             self.learning_rate, 50)
                 else:
                     self.train_with_raw_data(inputs[batch * batch_size: (batch+1) * batch_size],
                                              y[batch * batch_size: (batch+1) * batch_size],
-                                             self.learning_rate)
+                                             self.learning_rate, 50)
 
-            return self.train_with_raw_data(inputs, y, self.learning_rate)
-        else:
-            return None
 
