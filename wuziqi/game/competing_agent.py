@@ -22,11 +22,11 @@ class CompetingAgent(interfaces.IAgent):
         self.mode = "online_learning."
         self.lbd = lbd
         self.search_depth = 20
-        self.search_width = 10
+        self.search_width = 20
         self.policy_training_data = []
         self.value_net_training_data = []
         self.value_net_training_size = 20
-        self.policy_training_size = 200
+        self.policy_training_size = 50
         self.epsilon = 0.001
         self.greedy_rate = 0.5
         self.board_size = board_size
@@ -242,12 +242,12 @@ class CompetingAgent(interfaces.IAgent):
         session = history, reverse_history(opponent_history), final_result
         return self.learn_from_session(session, learn_from_winner)
 
-    def train_model_with_raw_data(self, train_dir):
+    def train_model_with_raw_data(self, train_dir, model_dir):
         print('training model with raw data...')
         self.policy.training_data_dir = train_dir
         self.qnet.training_data_dir = train_dir
         self.qnet.train_with_file()
-        self.policy.train_with_file()
+        self.policy.train_with_file(model_dir)
 
 
     def choose_best_action_from_rehearsals(self, rehearsals, reversed_rehearsals):

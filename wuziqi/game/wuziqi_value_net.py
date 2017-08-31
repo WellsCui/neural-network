@@ -136,6 +136,7 @@ class WuziqiQValueNet(interfaces.IActionEvaluator):
         self.sess = tf.Session()
         self.sess.run(tf.global_variables_initializer())
         self.sess.run(tf.local_variables_initializer())
+        self.maximum_training_size = 2000
 
     def evaluate(self, state, action):
         return self.sess.run(self.pred, {self.state_actions: self.build_state_action(state, action),
@@ -190,6 +191,14 @@ class WuziqiQValueNet(interfaces.IActionEvaluator):
             self.cached_training_data = [
                 np.vstack((self.cached_training_data[0], training_data[0])),
                 np.vstack((self.cached_training_data[1], training_data[1]))]
+
+        data_length = self.cached_training_data[0].shape[0]
+
+        if data_length > self.maximum_training_size:
+            self.cached_training_data = [
+                self.cached_training_data[0][data_length - self.maximum_training_size:],
+                self.cached_training_data[1][data_length - self.maximum_training_size:]]
+
         return self.cached_training_data
 
     def recall_training_data(self, state_actions, y, predicted_y):
@@ -243,15 +252,15 @@ class WuziqiQValueNet(interfaces.IActionEvaluator):
             if (i + 1) % log_epic == 0 or i == 0:
                 eval_epic(i, loss)
 
-        self.recall_training_data(state_actions, y, pred)
+        # self.recall_training_data(state_actions, y, pred)
 
         return loss
 
 
-    def build_td_0_training_data(self, data):
+    def build_td_0_training_data(self, sessions):
         inputs = None
         y = None
-        for session in data:
+        for session in sessions:
             steps = len(session)
             if steps < 2:
                 continue
@@ -273,11 +282,11 @@ class WuziqiQValueNet(interfaces.IActionEvaluator):
                 y = np.vstack((y, session_y))
         return inputs, y
 
-    def build_td_training_data(self, data):
+    def build_td_training_data(self, sessions):
         inputs = []
         y = []
         margin = (1 - self.lbd) / 2
-        for session in data:
+        for session in sessions:
             steps = len(session)
             if steps < 2:
                 continue
@@ -297,7 +306,7 @@ class WuziqiQValueNet(interfaces.IActionEvaluator):
             session_y = self.lbd * self.sess.run(self.pred, {self.state_actions: session_inputs[1:],
                                                              self.mode: learn.ModeKeys.EVAL})
 
-            for index in range(steps - 2, 0, -1):
+            for index in range(steps - 2, -1, -1):
                 state, action, reward = session[index]
                 end_value = reward + self.lbd * end_value
                 if end_value - session_y[index] > end_value * margin:
@@ -305,7 +314,7 @@ class WuziqiQValueNet(interfaces.IActionEvaluator):
                     y.append([end_value])
                 elif session_y[index] - self.lbd > self.lbd * margin and reward == 0:
                     inputs.append(self.build_state_action(state, action))
-                    y.append([self.lbd])
+                    y.append([end_value])
                 # elif end_value - self.lbd > (1 - self.lbd) / 2:
                 #     end_value = self.lbd
                 #     inputs.append(self.build_state_action(end_state, end_action))
@@ -353,13 +362,7 @@ class WuziqiQValueNet(interfaces.IActionEvaluator):
             if remain > 0:
                 batch_count += 1
             for batch in range(batch_count):
-                if batch == batch_count-1:
-                    self.train_with_raw_data(inputs[batch * batch_size:],
-                                             y[batch * batch_size:],
-                                             self.learning_rate, 50)
-                else:
-                    self.train_with_raw_data(inputs[batch * batch_size: (batch+1) * batch_size],
-                                             y[batch * batch_size: (batch+1) * batch_size],
-                                             self.learning_rate, 50)
-
-
+                sample = np.random.choice(record_count, batch_size)
+                self.train_with_raw_data(inputs[sample],
+                                         y[sample],
+                                         self.learning_rate, 50)

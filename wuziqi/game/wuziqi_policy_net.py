@@ -218,7 +218,7 @@ class WuziqiPolicyNet(interfaces.IPolicy):
 
         return self.train_with_raw_data(states, y)
 
-    def train_with_raw_data(self, states, y, log_epic=50):
+    def train_with_raw_data(self, states, y, log_epic=50, model_dir=None):
         print("Policy-Net learning rate: %f training size %s" % (self.learning_rate, y.shape))
 
         accuracy, top_5_accuracy, top_10_accuracy = [0, 0, 0]
@@ -234,6 +234,9 @@ class WuziqiPolicyNet(interfaces.IPolicy):
             if (i + 1) % log_epic == 0 or i == 0:
                 print("epic %d policy accuracy: %f top_5_accuracy: %f , top_10_accuracy: %f"
                       % (i, accuracy, top_5_accuracy, top_10_accuracy))
+            if model_dir is not None:
+                print("Saving policy model...")
+                self.save(model_dir)
         return [accuracy, top_5_accuracy, top_10_accuracy]
 
     def save(self, save_path):
@@ -259,7 +262,7 @@ class WuziqiPolicyNet(interfaces.IPolicy):
             game.utils.create_earray(f, 'train_output', training_data[1])
         f.close()
 
-    def train_with_file(self):
+    def train_with_file(self, model_dir):
         train_file = self.training_data_dir + "/policy_train.h5"
         if os.path.isfile(train_file):
             f = tables.open_file(train_file)
@@ -269,6 +272,6 @@ class WuziqiPolicyNet(interfaces.IPolicy):
             record_count = y.shape[0]
             print("Training policy net with %d records..." % record_count)
             self.merge_with_cached_training_data([inputs, y])
-            return self.train_with_raw_data(inputs, y, 5)
+            return self.train_with_raw_data(inputs, y, 5, model_dir)
         else:
             return None

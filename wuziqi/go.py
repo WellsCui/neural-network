@@ -272,8 +272,8 @@ def run_competing_agent(base_path, save_model):
     if os.path.isfile(os.path.join(model_path+'/checkpoint')):
         print("Loading player1 model...")
         player1.load_model(model_path)
-    player1.train_model_with_raw_data(training_data_dir)
-    player1.save(model_path)
+    # player1.train_model_with_raw_data(training_data_dir)
+    # player1.save(model_path)
     # train_agent_with_games(player1, model_path)
     player1.online_learning = True
     player1.is_greedy = True
@@ -289,6 +289,14 @@ def train_with_games(training_data_dir, model_dir):
     player1.policy.training_data_dir = training_data_dir
     train_agent_with_games(player1, training.bdt_game.get_sessions('data/gomocup-2016.bdt'), model_dir)
 
+def train_with_raw_data(training_data_dir, model_dir):
+    board_size = (15, 15)
+    player1 = competing_agent.CompetingAgent("player1", board_size, 0.0005, 1, 0.99)
+    player1.load_model(model_dir)
+    player1.qnet.training_data_dir = training_data_dir
+    player1.policy.training_data_dir = training_data_dir
+    player1.train_model_with_raw_data(training_data_dir, model_dir)
+    player1.save(model_dir)
 
 def train_agent_with_games(agent: competing_agent.CompetingAgent, sessions, save_dir):
     finished_sessions = (s for s in sessions if s[2] != 0)
@@ -311,11 +319,13 @@ def train_agent_with_games(agent: competing_agent.CompetingAgent, sessions, save
 
 # training.psq_game.replay_psq_games()
 # training.psq_game.convert_psq_files('../history/standard', 'data/gomocup-2016.bdt')
-# train_with_games("/output/data", "/output/player1")
+# train_with_games("/output/data", "/output/model")
+# train_with_raw_data("data", "/output/model")
+# train_with_raw_data("../history/gomocup-2016-3/data", "../history/gomocup-2016-3/model")
 # train_with_games("../history/gomocup-2016/data", "../history/gomocup-2016/model")
 # training.bdt_game.replay_sessions()
 # replay_games()
-run_competing_agent("../history/gomocup-2016", False)
+run_competing_agent("../history/gomocup-2016-3", True)
 
 # train_evaluator(1000, 100)
 #run_actor_critic_agent(10)
