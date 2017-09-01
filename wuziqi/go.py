@@ -189,7 +189,7 @@ def learn_from_experience(player: competing_agent.CompetingAgent, history, oppon
 
 
 def run_with_agents(times, player1: interfaces.IAgent, player2: interfaces.IAgent,
-                    model_path, saving_model=True, learn_from_winner=True):
+                    model1_path, model2_path, saving_model=True, learn_from_winner=True):
 
     def move(player, game):
         state = game.get_state().copy()
@@ -258,15 +258,38 @@ def run_with_agents(times, player1: interfaces.IAgent, player2: interfaces.IAgen
         print("Winner is", winner)
         if saving_model:
             print("Saving player1 model...")
-            player1.save(model_path)
-            # player1.save("/tmp/player2")
+            player1.save_model(model1_path)
+            player2.save_model(model2_path)
 
 
-def run_competing_agent(base_path, save_model):
+def ai_vs_ai(base_path, save_model):
     board_size = (15, 15)
     training_data_dir=os.path.join(base_path+"/data")
     player1 = competing_agent.CompetingAgent("player1", board_size, 0.0005, 1, 0.99, training_data_dir)
     player2 = competing_agent.CompetingAgent("player2", board_size, 0.0005, -1, 0.99, training_data_dir)
+    model1_path = os.path.join(base_path, "model/player1")
+    model2_path = os.path.join(base_path, "model/player1")
+    if os.path.isfile(os.path.join(model1_path, 'checkpoint')):
+        print("Loading player1 model...")
+        player1.load_model(model1_path)
+    if os.path.isfile(os.path.join(model2_path, 'checkpoint')):
+        print("Loading player2 model...")
+        player2.load_model(model2_path)
+
+    # player1.train_model_with_raw_data(training_data_dir)
+    # player1.save(model_path)
+    # train_agent_with_games(player1, model_path)
+    player1.online_learning = True
+    player2.online_learning = True
+    player1.is_greedy = True
+    player1.is_greedy = True
+    player2.is_greedy = True
+    run_with_agents(10, player1, player2, model1_path, model2_path, save_model, False)
+
+def ai_vs_human(base_path, online_learning):
+    board_size = (15, 15)
+    training_data_dir=os.path.join(base_path+"/data")
+    player1 = competing_agent.CompetingAgent("player1", board_size, 0.0005, 1, 0.99, training_data_dir)
     human_player = human_agent.HumanAgent("human", -1)
     model_path = os.path.join(base_path+"/model")
     if os.path.isfile(os.path.join(model_path+'/checkpoint')):
@@ -275,11 +298,9 @@ def run_competing_agent(base_path, save_model):
     # player1.train_model_with_raw_data(training_data_dir)
     # player1.save(model_path)
     # train_agent_with_games(player1, model_path)
-    player1.online_learning = True
+    player1.online_learning = online_learning
     player1.is_greedy = True
-    player2.is_greedy = True
-    run_with_agents(10, player1, human_player, model_path, save_model, True)
-    run_with_agents(10, player1, player2, model_path, save_model, False)
+    run_with_agents(10, player1, human_player, model_path, online_learning, True)
 
 
 def train_with_games(training_data_dir, model_dir):
@@ -296,7 +317,7 @@ def train_with_raw_data(training_data_dir, model_dir):
     player1.qnet.training_data_dir = training_data_dir
     player1.policy.training_data_dir = training_data_dir
     player1.train_model_with_raw_data(training_data_dir, model_dir)
-    player1.save(model_dir)
+    player1.save_model(model_dir)
 
 def train_agent_with_games(agent: competing_agent.CompetingAgent, sessions, save_dir):
     finished_sessions = (s for s in sessions if s[2] != 0)
@@ -310,7 +331,7 @@ def train_agent_with_games(agent: competing_agent.CompetingAgent, sessions, save
             print("Training agent %s with session: %d" % (agent.name, session_id))
             if agent.learn_from_session(session, True):
                 print("Saving model...")
-                agent.save(save_dir)
+                agent.save_model(save_dir)
         return i
 
     i = train_with_sessions(finished_sessions, 0)
@@ -325,7 +346,9 @@ def train_agent_with_games(agent: competing_agent.CompetingAgent, sessions, save
 # train_with_games("../history/gomocup-2016/data", "../history/gomocup-2016/model")
 # training.bdt_game.replay_sessions()
 # replay_games()
-run_competing_agent("../history/gomocup-2016-3", True)
+ai_vs_human("../history/gomocup-2016-3", False)
+# ai_vs_human("../history/ai_vs_human", True)
+# ai_vs_ai("../history/ai_vs_ai", True)
 
 # train_evaluator(1000, 100)
 #run_actor_critic_agent(10)

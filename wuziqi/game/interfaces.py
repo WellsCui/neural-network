@@ -25,6 +25,10 @@ class IAgent(metaclass=ABCMeta):
     def learn_from_experience(self, experience, learn_from_winner=False):
         pass
 
+    @abstractmethod
+    def save_model(self, model_dir):
+        pass
+
 
 
 class IEvaluator(metaclass=ABCMeta):

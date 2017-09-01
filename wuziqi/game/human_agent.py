@@ -25,3 +25,6 @@ class HumanAgent(interfaces.IAgent):
 
     def learn_from_experience(self, experience, learn_from_winner):
         pass
+
+    def save_model(self, model_dir):
+        pass

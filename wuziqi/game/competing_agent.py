@@ -21,7 +21,7 @@ class CompetingAgent(interfaces.IAgent):
         self.qnet.training_data_dir = training_data_dir
         self.mode = "online_learning."
         self.lbd = lbd
-        self.search_depth = 20
+        self.search_depth = 10
         self.search_width = 20
         self.policy_training_data = []
         self.value_net_training_data = []
@@ -36,28 +36,44 @@ class CompetingAgent(interfaces.IAgent):
         self.policy_accuracy = [0, 0, 0]
         self.online_learning = True
 
+    def print_actions_value(self, environment: interfaces.IEnvironment, actions):
+        for a in actions:
+            print('action (%d, %d): %f, %f' % (a.x, a.y,
+                                               self.qnet.evaluate(environment.get_state(), a),
+                                               self.qnet.evaluate(environment.reverse().get_state(), a)
+                                               ))
+
     def act(self, environment: interfaces.IEnvironment):
         state = environment.get_state().copy()
         policy_actions, candidates = self.get_candidate_actions(environment, self.policy, self.last_action)
         rehearsals = []
         reversed_rehearsals = []
 
+        reversed_environment = environment.reverse()
+
         for act in candidates:
             rehearsals.append(self.rehearsal(environment.clone(), act, self.policy, self.search_depth))
-            reversed_rehearsals.append(self.rehearsal(environment.reverse(), act, self.policy, self.search_depth))
+            reversed_rehearsals.append(self.rehearsal(reversed_environment.clone(), act, self.policy, self.search_depth))
 
         best_action = self.choose_best_action_from_rehearsals(rehearsals, reversed_rehearsals)
 
         # if self.qnet_error < 0.0005:
         #     self.policy_training_data.append([state, best_action])
 
+        # self.print_actions_value(environment, policy_actions)
+
+        opponent_last_action = reversed_environment.last_action
+        reversed_environment.state[opponent_last_action.x, opponent_last_action.y] = 0
+        opponent_action_value = self.qnet.evaluate(reversed_environment.get_state(), opponent_last_action)
+
         if self.is_greedy:
             action = best_action
         else:
             action = game.utils.partial_random(best_action, candidates, self.greedy_rate)
 
-        print("%s: best (%d, %d): %f, in policy actions: %d, %s,  actual (%d, %d): %f best: %s" %
+        print("%s: opponent_action_val: %f best (%d, %d): %f, in policy actions: %d, %s,  actual (%d, %d): %f best: %s" %
               (self.name,
+               opponent_action_value,
                best_action.x, best_action.y,
                self.qnet.evaluate(state, best_action),
                len(policy_actions),
@@ -89,13 +105,18 @@ class CompetingAgent(interfaces.IAgent):
         state, action, reward = history[-1]
 
         if final_state == 0:
-            result = self.qnet.evaluate(state, action)
-            if len(opponent_history) > 0:
-                opponent_state, opponent_action, opponent_reward = opponent_history[-1]
-                result -= self.qnet.evaluate(opponent_state, opponent_action)
+            val = self.qnet.evaluate(state, action)
+            if val > self.lbd:
+                val = self.lbd
+            result = val * (self.lbd ** (len(history) - 1))
+            # if len(opponent_history) > 0:
+            #     opponent_state, opponent_action, opponent_reward = opponent_history[-1]
+            #     result -= self.qnet.evaluate(opponent_state, opponent_action)
         else:
-            result = final_state
-        return result * (self.lbd ** (len(history) - 2))
+            result = final_state * (self.lbd ** (len(history) - 2))
+        print("action (%d, %d) len %d rehearsal val: %f , final state: %d" %
+              (history[0][1].x,  history[0][1].y, len(history), result, final_state))
+        return result
 
     @staticmethod
     def get_available_actions(environment: interfaces.IEnvironment, side):
@@ -173,10 +194,15 @@ class CompetingAgent(interfaces.IAgent):
                        np.ones((5, 1)) * top10_possibilities)).reshape((10,))
 
         def get_action_from_policy(policy, environment, last_action):
+            neighbor_actions = self.get_neighbor_actions(environment, last_action)
             if self.is_greedy:
-                return policy.suggest(environment.get_state(), self.side, 1)[0]
+                policy_actions = policy.suggest(environment.get_state(), self.side, self.search_width)
+                candidate_action = [a for a in policy_actions if self.contain_action(neighbor_actions, a)]
+                if len(candidate_action) == 0:
+                    candidate_action = neighbor_actions
+                return self.qnet.suggest(environment, candidate_action, 1)[0]
             else:
-                neighbor_actions = self.get_neighbor_actions(environment, last_action)
+
                 policy_actions = policy.suggest(environment.get_state(), self.side, 10)
                 if len(neighbor_actions) == 0:
                     return np.random.choice(policy_actions)
@@ -216,7 +242,7 @@ class CompetingAgent(interfaces.IAgent):
                 history2.append([next_state_2, next_action_2, r2])
 
                 if environment.is_ended():
-                    if r1 == 1:
+                    if r2 == 1:
                         next_action_1 = wuziqi.WuziqiAction(0, 0, 0)
                         history1.append([state, next_action_1, 0])
                         history2.append([state * -1, next_action_1, 0])
@@ -227,9 +253,9 @@ class CompetingAgent(interfaces.IAgent):
                     next_action_1 = get_action_from_policy(self.policy, environment, next_action_1)
         return history1, history2, final_state
 
-    def save(self, save_dir):
-        self.qnet.save(save_dir)
-        self.policy.save(save_dir)
+    def save_model(self, model_dir):
+        self.qnet.save(model_dir)
+        self.policy.save(model_dir)
 
     def load_model(self, restore_dir):
         self.qnet.restore(restore_dir)
@@ -248,7 +274,6 @@ class CompetingAgent(interfaces.IAgent):
         self.qnet.training_data_dir = train_dir
         self.qnet.train_with_file()
         self.policy.train_with_file(model_dir)
-
 
     def choose_best_action_from_rehearsals(self, rehearsals, reversed_rehearsals):
         rs = rehearsals+reversed_rehearsals
