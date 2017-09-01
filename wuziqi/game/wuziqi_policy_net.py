@@ -247,10 +247,13 @@ class WuziqiPolicyNet(interfaces.IPolicy):
         return self.saver.save(self.sess, save_file)
 
     def restore(self, save_path):
-        return self.saver.restore(self.sess, save_path + "/policy_ckpts")
+        if os.path.isfile(save_path + "/policy_ckpts.meta"):
+            return self.saver.restore(self.sess, save_path + "/policy_ckpts")
 
     def save_training_data(self, training_data):
         train_file = self.training_data_dir + "/policy_train.h5"
+        if not os.path.exists(self.training_data_dir):
+            os.makedirs(self.training_data_dir)
         if os.path.isfile(train_file):
             f = tables.open_file(train_file, mode='a')
             f.root.train_input.append(training_data[0])

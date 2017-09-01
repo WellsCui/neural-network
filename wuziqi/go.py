@@ -254,7 +254,7 @@ def run_with_agents(times, player1: interfaces.IAgent, player2: interfaces.IAgen
         print("Winner is", winner)
         if saving_model:
             print("Saving player1 model...")
-            player1.save("/tmp/player1")
+            player1.save("../history/11x11/model")
         # player1.save("/tmp/player2")
 
 def run_competing_agent(times):
@@ -262,11 +262,11 @@ def run_competing_agent(times):
     player1 = competing_agent.CompetingAgent("player1", board_size, 0.0005, 1, 0.99)
     player2 = competing_agent.CompetingAgent("player2", board_size, 0.0005, -1, 0.99)
     human_player = human_agent.HumanAgent("human", -1)
-    save_path = "/tmp/player1"
+    save_path = "../history/11x11/model"
     if os.path.exists(save_path):
         print("Loading model...")
         player1.restore(save_path)
-    player1.train_model_with_raw_data('/tmp/player1/data')
+    player1.train_model_with_raw_data('../history/11x11/data')
     # player2.restore("/tmp/player1")
 
     player1.is_greedy = True

@@ -136,6 +136,7 @@ class WuziqiQValueNet(interfaces.IActionEvaluator):
 
         # print("trainable_variables:", tf.trainable_variables())
         self.saver = tf.train.Saver()
+        self.optimizer = tf.train.AdamOptimizer(learning_rate, name="ValueNet_Optimizer").minimize(self.loss)
         self.sess = tf.Session()
         self.sess.run(tf.global_variables_initializer())
         self.sess.run(tf.local_variables_initializer())
@@ -228,14 +229,14 @@ class WuziqiQValueNet(interfaces.IActionEvaluator):
                              {self.state_actions: state_actions,
                               self.y: y,
                               self.mode: learn.ModeKeys.TRAIN})
-        if loss < 0.00005:
-            return loss
+        # if loss < 0.00005:
+        #     return loss
 
         # eval_epic(-1, loss)
 
-        optimizer = tf.train.GradientDescentOptimizer(learning_rate).minimize(self.loss)
+        # optimizer = tf.train.GradientDescentOptimizer(learning_rate).minimize(self.loss)
         for i in range(self.training_epics):
-            loss, _ = self.sess.run([self.loss, optimizer],
+            loss, _ = self.sess.run([self.loss, self.optimizer],
                                     {self.state_actions: state_actions,
                                      self.y: y,
                                      self.mode: learn.ModeKeys.TRAIN})
@@ -321,7 +322,8 @@ class WuziqiQValueNet(interfaces.IActionEvaluator):
         return self.saver.save(self.sess, save_file)
 
     def restore(self, save_path):
-        return self.saver.restore(self.sess, save_path + "/qvalue_ckpts")
+        if os.path.isfile(save_path + "/qvalue_ckpts.meta"):
+            return self.saver.restore(self.sess, save_path + "/qvalue_ckpts")
 
     def save_training_data(self, train_data):
         train_file = self.training_data_dir + "/value_net_train.h5"
