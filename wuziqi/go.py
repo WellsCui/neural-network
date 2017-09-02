@@ -266,8 +266,10 @@ def run_competing_agent(times):
     if os.path.exists(save_path):
         print("Loading model...")
         player1.restore(save_path)
-    player1.train_model_with_raw_data('../history/11x11/data')
+    # player1.train_model_with_raw_data('../history/11x11/data')
+    # player1.save(save_path)
     # player2.restore("/tmp/player1")
+    player1.online_learning = False
 
     player1.is_greedy = True
     player2.is_greedy = True

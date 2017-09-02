@@ -32,6 +32,7 @@ class CompetingAgent(interfaces.IAgent):
         self.last_action = None
         self.qnet_error = 1
         self.policy_accuracy = [0, 0, 0]
+        self.online_learning = True
 
     def act(self, environment: interfaces.IEnvironment):
         state = environment.get_state().copy()
@@ -64,7 +65,8 @@ class CompetingAgent(interfaces.IAgent):
                self.qnet.evaluate(state, action),
                action == best_action))
 
-        self.learn_from_rehearsals(rehearsals + reversed_rehearsals)
+        if self.online_learning:
+            self.learn_from_rehearsals(rehearsals + reversed_rehearsals)
         self.last_action = action
         environment.update(self.last_action)
         return self.last_action
@@ -153,6 +155,15 @@ class CompetingAgent(interfaces.IAgent):
             result = final_state * (self.lbd ** (len(history) - 2))
         print("action (%d, %d) len %d rehearsal val: %f , final state: %d" %
               (history[0][1].x, history[0][1].y, len(history), result, final_state))
+        action_str = []
+        for s, a, r in history:
+            action_str.append('(%d, %d)' % (a.x, a.y))
+        print(' '.join(action_str))
+        action_str = []
+        for s, a, r in opponent_history:
+            action_str.append('(%d, %d)' % (a.x, a.y))
+        print(' '.join(action_str))
+
 
         return result
 
@@ -198,18 +209,22 @@ class CompetingAgent(interfaces.IAgent):
 
         neighbor_actions = self.get_neighbor_actions(environment, last_action)
 
-        select_count = int(self.search_width/2)
+        select_count = self.search_width
 
         policy_actions = [a for a in
                           self.merge_actions(policy.suggest(environment.get_state(), self.side, select_count),
                                              policy.suggest(environment.reverse().get_state(), self.side, select_count))
                           if self.contain_action(neighbor_actions, a)]
 
-        random_count = self.search_width - len(policy_actions)
-        random_actions = np.ndarray.tolist(np.random.choice([a for a in neighbor_actions
-                                                             if not self.contain_action(policy_actions, a)],
-                                                            random_count))
-        return policy_actions, policy_actions + random_actions
+        if len(policy_actions) >= self.search_width:
+            policy_actions = np.random.choice(policy_actions, self.search_width)
+            return policy_actions, policy_actions
+        else:
+            random_count = self.search_width - len(policy_actions)
+            random_actions = np.ndarray.tolist(np.random.choice([a for a in neighbor_actions
+                                                                 if not self.contain_action(policy_actions, a)],
+                                                                random_count))
+            return policy_actions, policy_actions + random_actions
 
     def rehearsal(self, environment: interfaces.IEnvironment, action, opponent_policy: interfaces.IPolicy, steps):
         def get_reward(side):
@@ -234,13 +249,20 @@ class CompetingAgent(interfaces.IAgent):
         def get_action_from_policy(policy, environment, last_action):
             neighbor_actions = self.get_neighbor_actions(environment, last_action)
             if self.is_greedy:
-                policy_actions = policy.suggest(environment.get_state(), self.side, self.search_width)
+                policy_actions = self.merge_actions(
+                    policy.suggest(environment.get_state(), self.side, self.search_width),
+                    policy.suggest(environment.get_state()*-1, self.side, self.search_width)
+                )
+
                 candidate_action = [a for a in policy_actions if self.contain_action(neighbor_actions, a)]
                 if len(candidate_action) == 0:
                     candidate_action = neighbor_actions
                 return self.qnet.suggest(environment, candidate_action, 1)[0]
             else:
-                policy_actions = policy.suggest(environment.get_state(), self.side, 10)
+                policy_actions = self.merge_actions(
+                    policy.suggest(environment.get_state(), self.side, self.search_width),
+                    policy.suggest(environment.get_state()*-1, self.side, self.search_width)
+                )
                 if len(neighbor_actions) == 0:
                     return np.random.choice(policy_actions)
                 elif np.random.choice(2, p=[self.greedy_rate, 1 - self.greedy_rate]) == 0:

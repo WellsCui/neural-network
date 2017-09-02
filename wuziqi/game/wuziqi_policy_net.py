@@ -118,7 +118,7 @@ class WuziqiPolicyNet(interfaces.IPolicy):
         dropout = tf.layers.dropout(
             name=name+"policy_dropout",
             inputs=pool_flat,
-            rate=0.5,
+            rate=0.7,
             training=self.mode == learn.ModeKeys.TRAIN)
         dense = tf.layers.dense(
             name=name+"policy_dense",

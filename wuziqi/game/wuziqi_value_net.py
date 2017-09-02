@@ -28,6 +28,7 @@ class WuziqiQValueNet(interfaces.IActionEvaluator):
         self.minimum_training_size = 100
         self.cached_training_data = None
         self.training_data_dir = '/tmp/player1/data'
+        self.maximum_training_size = 2000
 
         input_layer = tf.reshape(
             self.state_actions, [-1, board_size[0], board_size[1], 2],
@@ -118,7 +119,7 @@ class WuziqiQValueNet(interfaces.IActionEvaluator):
         pool_flat = tf.reshape(conv7, [-1, flat_size], name=name + "value_net_pool_flat")
         dropout = tf.layers.dropout(
             name=name + "value_net_dropout",
-            inputs=pool_flat, rate=0.5, training=self.mode == learn.ModeKeys.TRAIN)
+            inputs=pool_flat, rate=0.7, training=self.mode == learn.ModeKeys.TRAIN)
         dense = tf.layers.dense(
             inputs=dropout, units=2048, activation=tf.nn.relu, name=name + "value_net_dense")
 
@@ -194,6 +195,11 @@ class WuziqiQValueNet(interfaces.IActionEvaluator):
             self.cached_training_data = [
                 np.vstack((self.cached_training_data[0], training_data[0])),
                 np.vstack((self.cached_training_data[1], training_data[1]))]
+        data_length = self.cached_training_data[1].shape[0]
+        if data_length > self.maximum_training_size:
+            self.cached_training_data = [
+                self.cached_training_data[0][data_length - self.maximum_training_size:],
+                self.cached_training_data[1][data_length - self.maximum_training_size:]]
         return self.cached_training_data
 
     def recall_training_data(self, state_actions, y):
@@ -243,7 +249,7 @@ class WuziqiQValueNet(interfaces.IActionEvaluator):
             if (i + 1) % 50 == 0 or i == 0:
                 eval_epic(i, loss)
 
-        self.recall_training_data(state_actions, y)
+        # self.recall_training_data(state_actions, y)
 
         return loss
 
