@@ -11,6 +11,9 @@ class WuziqiAction(object):
     def reverse(self):
         return WuziqiAction(self.x, self.y, self.val * -1)
 
+    def clone(self):
+        return WuziqiAction(self.x, self.y, self.val)
+
 
 class Position(object):
     def __init__(self, x, y):
@@ -30,7 +33,7 @@ class WuziqiGame(game.interfaces.IEnvironment):
         return self.state
 
     def update(self, action):
-        self.state[action.x, action.y] = action.val
+        self.state[action.y, action.x] = action.val
         self.last_action = action
         return self.state
 
@@ -41,7 +44,7 @@ class WuziqiGame(game.interfaces.IEnvironment):
         points = self.get_available_points()
         actions = []
         for i in range(len(points[0])):
-            actions.append(WuziqiAction(points[0][i], points[1][i], side))
+            actions.append(WuziqiAction(points[1][i], points[0][i], side))
         return actions
 
     @staticmethod
@@ -66,9 +69,9 @@ class WuziqiGame(game.interfaces.IEnvironment):
         return 0
 
     @staticmethod
-    def get_diagonal_row(state, start_x, start_y, end_x, end_y, x_step, y_step):
+    def get_diagonal_row(state, start_y, start_x, end_y, end_x, y_step,  x_step):
         # print("start_x, end_x, x_step, start_y, end_y, y_step:", start_x, end_x, x_step, start_y, end_y, y_step)
-        row = state[range(start_x, end_x, x_step), range(start_y, end_y, y_step)]
+        row = state[range(start_y, end_y, y_step), range(start_x, end_x, x_step)]
         # print(row)
         return row
 
@@ -86,12 +89,12 @@ class WuziqiGame(game.interfaces.IEnvironment):
         return rows
 
     def eval_state(self):
-        for x in range(self.board_size[0]):
-            val1 = WuziqiGame.eval_row(self.state[x, :])
+        for y in range(self.board_size[0]):
+            val1 = WuziqiGame.eval_row(self.state[y, :])
             if val1 in WuziqiGame.SIDES:
                 return val1
-        for y in range(self.board_size[1]):
-            val2 = WuziqiGame.eval_row(self.state[:, y])
+        for x in range(self.board_size[1]):
+            val2 = WuziqiGame.eval_row(self.state[:, x])
             if val2 in WuziqiGame.SIDES:
                 return val2
         for row in WuziqiGame.get_diagonal_rows(self.board_size, self.state):
@@ -117,7 +120,7 @@ class WuziqiGame(game.interfaces.IEnvironment):
         for y in range(self.board_size[1]):
             row = []
             for x in range(self.board_size[0]):
-                state = self.state[x, y]
+                state = self.state[y, x]
                 if self.last_action.x == x and self.last_action.y == y:
                     if self.last_action.val == 1:
                         row.append('#')
@@ -136,6 +139,7 @@ class WuziqiGame(game.interfaces.IEnvironment):
     def clone(self):
         cloned = WuziqiGame(self.board_size)
         cloned.state = self.state.copy()
+        cloned.last_action = self.last_action.clone()
         return cloned
 
     def reverse(self):
@@ -155,7 +159,7 @@ class WuziqiGame(game.interfaces.IEnvironment):
             return range(start, end)
 
         def is_available(x, y):
-            return self.state[x, y] == 0
+            return self.state[y, x] == 0
 
         x_options = get_range(pos.x, 0, self.board_size[0])
         y_options = get_range(pos.y, 0, self.board_size[1])

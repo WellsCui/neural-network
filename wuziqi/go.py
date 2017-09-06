@@ -286,21 +286,21 @@ def ai_vs_ai(base_path, save_model):
     player2.is_greedy = True
     run_with_agents(10, player1, player2, model1_path, model2_path, save_model, False)
 
-def ai_vs_human(base_path, online_learning):
+def ai_vs_human(base_path, load_from_model=True, online_learning=True):
     board_size = (15, 15)
     training_data_dir=os.path.join(base_path+"/data")
     player1 = competing_agent.CompetingAgent("player1", board_size, 0.0005, 1, 0.99, training_data_dir)
     human_player = human_agent.HumanAgent("human", -1)
     model_path = os.path.join(base_path+"/model")
-    if os.path.isfile(os.path.join(model_path+'/checkpoint')):
+    if load_from_model and os.path.isfile(os.path.join(model_path+'/checkpoint')):
         print("Loading player1 model...")
         player1.load_model(model_path)
-    # player1.train_model_with_raw_data(training_data_dir)
+    # player1.train_model_with_raw_data(training_data_dir, model_path, 300)
     # player1.save(model_path)
     # train_agent_with_games(player1, model_path)
     player1.online_learning = online_learning
     player1.is_greedy = True
-    run_with_agents(10, player1, human_player, model_path, online_learning, True)
+    run_with_agents(10, player1, human_player, model_path, model_path, online_learning, True)
 
 
 def train_with_games(training_data_dir, model_dir):
@@ -313,10 +313,10 @@ def train_with_games(training_data_dir, model_dir):
 def train_with_raw_data(training_data_dir, model_dir):
     board_size = (15, 15)
     player1 = competing_agent.CompetingAgent("player1", board_size, 0.0005, 1, 0.99)
-    player1.load_model(model_dir)
+    # player1.load_model(model_dir)
     player1.qnet.training_data_dir = training_data_dir
     player1.policy.training_data_dir = training_data_dir
-    player1.train_model_with_raw_data(training_data_dir, model_dir)
+    player1.train_model_with_raw_data(training_data_dir, model_dir, 300)
     player1.save_model(model_dir)
 
 def train_agent_with_games(agent: competing_agent.CompetingAgent, sessions, save_dir):
@@ -338,15 +338,15 @@ def train_agent_with_games(agent: competing_agent.CompetingAgent, sessions, save
     # train_with_sessions(unfinished_sessions, i)
 
 
-# training.psq_game.replay_psq_games()
+# training.bdt_game.replay_games('data/gomocup-2016.bdt')
 # training.psq_game.convert_psq_files('../history/standard', 'data/gomocup-2016.bdt')
 # train_with_games("/output/data", "/output/model")
 # train_with_raw_data("data", "/output/model")
-# train_with_raw_data("../history/gomocup-2016-3/data", "../history/gomocup-2016-3/model")
+# train_with_raw_data("data", "../history/gomocup-2016-5/model")
 # train_with_games("../history/gomocup-2016/data", "../history/gomocup-2016/model")
 # training.bdt_game.replay_sessions()
 # replay_games()
-ai_vs_human("../history/gomocup-2016-3", False)
+ai_vs_human("../history/gomocup-2016-6", True, True)
 # ai_vs_human("../history/ai_vs_human", True)
 # ai_vs_ai("../history/ai_vs_ai", True)
 

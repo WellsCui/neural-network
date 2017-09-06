@@ -10,7 +10,7 @@ class WuziqiRandomAgent(interfaces.IAgent):
     def act(self, environment: interfaces.IEnvironment):
         points = environment.get_available_points()
         i = random.randint(0, len(points[0]) - 1)
-        action = wuziqi.WuziqiAction(points[0][i], points[1][i], self.side)
+        action = wuziqi.WuziqiAction(points[1][i], points[0][i], self.side)
         environment.update(action)
         return action
 

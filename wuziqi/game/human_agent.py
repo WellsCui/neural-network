@@ -12,7 +12,7 @@ class HumanAgent(interfaces.IAgent):
         while action is None:
             try:
                 pos = eval(input('Enter your next move:'))
-                if environment.get_state()[pos[0], pos[1]] != 0:
+                if environment.get_state()[pos[1], pos[0]] != 0:
                     print("Your move is invalid.")
                 else:
                     action = wuziqi.WuziqiAction(pos[0], pos[1], self.side)

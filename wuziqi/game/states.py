@@ -29,7 +29,7 @@ def eval_point_states(points):
 
 def get_triangle_row(state, start_x, start_y, end_x, end_y, x_step, y_step):
     # print("start_x, end_x, x_step, start_y, end_y, y_step:", start_x, end_x, x_step, start_y, end_y, y_step)
-    row = state[range(start_x, end_x, x_step), range(start_y, end_y, y_step)]
+    row = state[range(start_y, end_y, y_step), range(start_x, end_x, x_step)]
 
     # print(row)
     return row
@@ -49,15 +49,15 @@ def get_triangle_rows(state):
 
 
 def eval_state(state):
-    for x in range(BOARD_SIZE[0]):
-        val1 = eval_point_states(state[x, :])
+    for y in range(BOARD_SIZE[0]):
+        val1 = eval_point_states(state[y, :])
         if val1 in TERMINAL_POINT_STATES:
-            print("row match in", x)
+            print("row match in", y)
             return val1
-    for y in range(BOARD_SIZE[1]):
-        val2 = eval_point_states(state[:, y])
+    for x in range(BOARD_SIZE[1]):
+        val2 = eval_point_states(state[:, x])
         if val2 in TERMINAL_POINT_STATES:
-            print("col match in", y)
+            print("col match in", x)
             return val2
     for triangle_row in get_triangle_rows(state):
         val3 = eval_point_states(triangle_row)

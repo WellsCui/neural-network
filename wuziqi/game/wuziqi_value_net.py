@@ -114,7 +114,7 @@ class WuziqiQValueNet(interfaces.IActionEvaluator):
         pool_flat = tf.reshape(pool6, [-1, flat_size], name=name + "value_net_pool_flat")
         dropout = tf.layers.dropout(
             name=name + "value_net_dropout",
-            inputs=pool_flat, rate=0.5, training=self.mode == learn.ModeKeys.TRAIN)
+            inputs=pool_flat, rate=0.8, training=self.mode == learn.ModeKeys.TRAIN)
         dense = tf.layers.dense(
             inputs=dropout, units=2048, activation=tf.nn.relu, name=name + "value_net_dense")
 
@@ -150,21 +150,38 @@ class WuziqiQValueNet(interfaces.IActionEvaluator):
 
     def suggest(self, environment, candidate_actions, suggest_count=1):
         state = environment.get_state().copy()
-        reversed_state = environment.get_state().copy()
+        reversed_state = state * -1
         candidate_count = len(candidate_actions)
-        evaluate_data = np.vstack(([self.build_state_action(state, action) for action in candidate_actions],
-                                   [self.build_state_action(reversed_state, action) for action in candidate_actions]))
+        # evaluate_data = np.vstack(([self.build_state_action(state, action) for action in candidate_actions],
+        #                            [self.build_state_action(reversed_state, action) for action in candidate_actions]
+        #                            ))
+
+        for a in candidate_actions:
+            env = environment.clone()
+            env.update(a)
+            if env.eval_state() == 1:
+                return [a]
+
+        evaluate_data = [self.build_state_action(state, action) for action in candidate_actions]
 
         results = self.sess.run(self.pred, {self.state_actions: evaluate_data,
                                             self.mode: learn.ModeKeys.EVAL})
 
-        results = np.hstack((results[:candidate_count], results[candidate_count:]))
+        # results = np.hstack((results[:candidate_count], results[candidate_count:]))
+
+        for i in range(results.shape[0]):
+            print('     (%d, %d): %f' % (candidate_actions[i].x, candidate_actions[i].y, results[i, 0]))
 
         chosen = []
         for i in range(suggest_count):
             max_index = np.unravel_index(np.argmax(results), results.shape)
+
             chosen.append(candidate_actions[max_index[0]])
             results[max_index] = -1
+        for a in chosen:
+            print(' choose (%d, %d)' % (a.x, a.y))
+
+
         return chosen
 
     def build_state_action(self, state, action):
@@ -357,7 +374,7 @@ class WuziqiQValueNet(interfaces.IActionEvaluator):
             f.close()
             record_count = y.shape[0]
             print("Training value net with %d records..." % record_count)
-            batch_size = 500
+            batch_size = 5000
             batch_count, remain = divmod(record_count, 500)
             if remain > 0:
                 batch_count += 1

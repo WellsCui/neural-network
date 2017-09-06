@@ -21,12 +21,12 @@ class CompetingAgent(interfaces.IAgent):
         self.qnet.training_data_dir = training_data_dir
         self.mode = "online_learning."
         self.lbd = lbd
-        self.search_depth = 10
+        self.search_depth = 5
         self.search_width = 20
         self.policy_training_data = []
         self.value_net_training_data = []
-        self.value_net_training_size = 20
-        self.policy_training_size = 50
+        self.value_net_training_size = 200
+        self.policy_training_size = 500
         self.epsilon = 0.001
         self.greedy_rate = 0.5
         self.board_size = board_size
@@ -50,6 +50,8 @@ class CompetingAgent(interfaces.IAgent):
         reversed_rehearsals = []
 
         reversed_environment = environment.reverse()
+        if self.last_action is not None:
+            reversed_environment.last_action = self.last_action.reverse()
 
         for act in candidates:
             rehearsals.append(self.rehearsal(environment.clone(), act, self.policy, self.search_depth))
@@ -63,7 +65,7 @@ class CompetingAgent(interfaces.IAgent):
         # self.print_actions_value(environment, policy_actions)
 
         opponent_last_action = reversed_environment.last_action
-        reversed_environment.state[opponent_last_action.x, opponent_last_action.y] = 0
+        reversed_environment.state[opponent_last_action.y, opponent_last_action.x] = 0
         opponent_action_value = self.qnet.evaluate(reversed_environment.get_state(), opponent_last_action)
 
         if self.is_greedy:
@@ -116,6 +118,18 @@ class CompetingAgent(interfaces.IAgent):
             result = final_state * (self.lbd ** (len(history) - 2))
         print("action (%d, %d) len %d rehearsal val: %f , final state: %d" %
               (history[0][1].x,  history[0][1].y, len(history), result, final_state))
+
+        def print_steps():
+            action_str = []
+            for s, a, r in history:
+                action_str.append('(%d, %d)' % (a.x, a.y))
+            print(' '.join(action_str))
+            action_str = []
+            for s, a, r in opponent_history:
+                action_str.append('(%d, %d)' % (a.x, a.y))
+            print(' '.join(action_str))
+
+        print_steps()
         return result
 
     @staticmethod
@@ -123,7 +137,7 @@ class CompetingAgent(interfaces.IAgent):
         points = environment.get_available_points()
         actions = []
         for i in range(len(points[0])):
-            actions.append(wuziqi.WuziqiAction(points[0][i], points[1][i], side))
+            actions.append(wuziqi.WuziqiAction(points[1][i], points[0][i], side))
         return actions
 
     @staticmethod
@@ -137,20 +151,20 @@ class CompetingAgent(interfaces.IAgent):
     def merge_actions(p1, p2):
         return p1 + [p for p in p2 if not CompetingAgent.contain_action(p1, p)]
 
-    def get_neighbor_actions(self, environment: interfaces.IEnvironment, last_action):
+    def get_neighbor_actions(self, environment: interfaces.IEnvironment, last_action, radius=5):
         def pos_to_action(pos: wuziqi.Position):
             return wuziqi.WuziqiAction(pos.x, pos.y, self.side)
 
         if last_action is None:
             indirect_neighbors_1 = []
         else:
-            indirect_neighbors_1 = environment.neighbor(wuziqi.Position(last_action.x, last_action.y), 5,
+            indirect_neighbors_1 = environment.neighbor(wuziqi.Position(last_action.x, last_action.y), radius,
                                                         True)
         if environment.last_action is None:
             indirect_neighbors_2 = []
         else:
             indirect_neighbors_2 = environment.neighbor(
-                wuziqi.Position(environment.last_action.x, environment.last_action.y), 5, True)
+                wuziqi.Position(environment.last_action.x, environment.last_action.y), radius, True)
 
         neighbor_actions = [a for a in [pos_to_action(pos) for pos
                                         in self.merge_actions(indirect_neighbors_1, indirect_neighbors_2)]]
@@ -158,20 +172,29 @@ class CompetingAgent(interfaces.IAgent):
 
     def get_candidate_actions(self, environment: interfaces.IEnvironment, policy, last_action):
 
-        neighbor_actions = self.get_neighbor_actions(environment, last_action)
+        neighbor_actions = self.get_neighbor_actions(environment, last_action, 5)
+        direct_neighbor_actions = self.get_neighbor_actions(environment, last_action, 2)
 
-        select_count = int(self.search_width/2)
+        select_count = int(self.search_width)
 
         policy_actions = [a for a in
                           self.merge_actions(policy.suggest(environment.get_state(), self.side, select_count),
                                              policy.suggest(environment.reverse().get_state(), self.side, select_count))
-                          if self.contain_action(neighbor_actions, a)]
+                          if self.contain_action(neighbor_actions, a) and
+                          not self.contain_action(direct_neighbor_actions, a)]
 
-        random_count = self.search_width - len(policy_actions)
-        random_actions = np.ndarray.tolist(np.random.choice([a for a in neighbor_actions
-                                                             if not self.contain_action(policy_actions, a)],
-                                                            random_count))
-        return policy_actions, policy_actions + random_actions
+        random_count = self.search_width - len(direct_neighbor_actions)
+        if len(policy_actions) >= random_count:
+            random_actions = np.ndarray.tolist(np.random.choice(policy_actions, random_count))
+            return random_actions, direct_neighbor_actions + random_actions
+        else:
+            random_count -= len(policy_actions)
+            chosen_actions = direct_neighbor_actions + policy_actions
+            random_actions = np.ndarray.tolist(np.random.choice([a for a in neighbor_actions
+                                                                 if not self.contain_action(chosen_actions, a)],
+                                                                random_count))
+            return policy_actions, chosen_actions + random_actions
+
 
     def rehearsal(self, environment: interfaces.IEnvironment, action, opponent_policy: interfaces.IPolicy, steps):
         def get_reward(side):
@@ -194,22 +217,26 @@ class CompetingAgent(interfaces.IAgent):
                        np.ones((5, 1)) * top10_possibilities)).reshape((10,))
 
         def get_action_from_policy(policy, environment, last_action):
-            neighbor_actions = self.get_neighbor_actions(environment, last_action)
-            if self.is_greedy:
-                policy_actions = policy.suggest(environment.get_state(), self.side, self.search_width)
-                candidate_action = [a for a in policy_actions if self.contain_action(neighbor_actions, a)]
-                if len(candidate_action) == 0:
-                    candidate_action = neighbor_actions
-                return self.qnet.suggest(environment, candidate_action, 1)[0]
-            else:
+            _, candidate_actions = self.get_candidate_actions(environment, policy, last_action)
+            print(" suggestion with environment last action (%d, %d) last action (%d, %d)"
+                  % (environment.last_action.x, environment.last_action.y, last_action.x, last_action.y))
+            return self.qnet.suggest(environment, candidate_actions, 1)[0]
+            # return policy.suggest(environment.get_state(), self.side, 1)[0]
 
-                policy_actions = policy.suggest(environment.get_state(), self.side, 10)
-                if len(neighbor_actions) == 0:
-                    return np.random.choice(policy_actions)
-                elif np.random.choice(2, p=[self.greedy_rate, 1 - self.greedy_rate]) == 0:
-                    return np.random.choice(policy_actions)
-                else:
-                    return np.random.choice(neighbor_actions)
+
+            # neighbor_actions = self.get_neighbor_actions(environment, last_action)
+            # policy_actions = policy.suggest(environment.get_state(), self.side, self.search_width)
+            # candidate_actions = [a for a in policy_actions if self.contain_action(neighbor_actions, a)]
+            # # print("Candidates:", ' '.join(['(%d, %d)' % (a.x, a.y) for a in candidate_actions]))
+            # if len(candidate_actions) == 0:
+            #     return np.random.choice(neighbor_actions)
+            # if self.is_greedy:
+            #     return self.qnet.suggest(environment, candidate_actions, 1)[0]
+            # else:
+            #     if np.random.choice(2, p=[self.greedy_rate, 1 - self.greedy_rate]) == 0:
+            #         return np.random.choice(candidate_actions)
+            #     else:
+            #         return np.random.choice(neighbor_actions)
 
         history1 = []
         history2 = []
@@ -218,9 +245,12 @@ class CompetingAgent(interfaces.IAgent):
         final_state = 0
         next_action_2 = environment.last_action.reverse()
 
+        print("Rehearsal with action (%d, %d)" % (action.x, action.y))
+
         while steps > 0:
             steps -= 1
             environment.update(next_action_1)
+            environment.show()
             r1 = get_reward(self.side)
             history1.append([next_state_1, next_action_1, r1])
             if environment.is_ended():
@@ -235,9 +265,11 @@ class CompetingAgent(interfaces.IAgent):
             else:
                 reversed_environment = environment.reverse()
                 next_state_2 = reversed_environment.get_state().copy()
+
                 next_action_2 = get_action_from_policy(opponent_policy, reversed_environment, next_action_2)
 
                 state = environment.update(next_action_2.reverse()).copy()
+                environment.show()
                 r2 = get_reward(self.side * -1)
                 history2.append([next_state_2, next_action_2, r2])
 
@@ -251,6 +283,7 @@ class CompetingAgent(interfaces.IAgent):
                 else:
                     next_state_1 = state
                     next_action_1 = get_action_from_policy(self.policy, environment, next_action_1)
+
         return history1, history2, final_state
 
     def save_model(self, model_dir):
@@ -268,11 +301,13 @@ class CompetingAgent(interfaces.IAgent):
         session = history, reverse_history(opponent_history), final_result
         return self.learn_from_session(session, learn_from_winner)
 
-    def train_model_with_raw_data(self, train_dir, model_dir):
+    def train_model_with_raw_data(self, train_dir, model_dir, epics):
         print('training model with raw data...')
         self.policy.training_data_dir = train_dir
         self.qnet.training_data_dir = train_dir
+        self.qnet.training_epics = epics
         self.qnet.train_with_file()
+        self.policy.training_epics = epics
         self.policy.train_with_file(model_dir)
 
     def choose_best_action_from_rehearsals(self, rehearsals, reversed_rehearsals):

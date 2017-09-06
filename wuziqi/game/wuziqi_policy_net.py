@@ -114,7 +114,7 @@ class WuziqiPolicyNet(interfaces.IPolicy):
         dropout = tf.layers.dropout(
             name=name+"policy_dropout",
             inputs=pool_flat,
-            rate=0.5,
+            rate=0.8,
             training=self.mode == learn.ModeKeys.TRAIN)
         dense = tf.layers.dense(
             name=name+"policy_dense",
@@ -162,13 +162,13 @@ class WuziqiPolicyNet(interfaces.IPolicy):
         min_val = np.amin(reshaped_pred) -1
         reshaped_pred[filled_pos] = min_val
 
-        def is_pos_available(x, y):
-            return state[x, y] == 0
+        def is_pos_available(y, x):
+            return state[y, x] == 0
 
         while count > 0:
             index = np.unravel_index(np.argmax(reshaped_pred), self.board_size)
             if is_pos_available(index[0], index[1]):
-                actions.append(wuziqi.WuziqiAction(index[0], index[1], side))
+                actions.append(wuziqi.WuziqiAction(index[1], index[0],  side))
                 count -= 1
             reshaped_pred[index] = min_val
         return actions
@@ -208,7 +208,7 @@ class WuziqiPolicyNet(interfaces.IPolicy):
 
         for i in range(state_shape[0]):
             action = data[i][1]
-            y[i, action.x, action.y] = 1
+            y[i, action.y, action.x] = 1
 
         y = y.reshape((state_shape[0], self.board_size[0]*self.board_size[1]))
 
@@ -234,9 +234,9 @@ class WuziqiPolicyNet(interfaces.IPolicy):
             if (i + 1) % log_epic == 0 or i == 0:
                 print("epic %d policy accuracy: %f top_5_accuracy: %f , top_10_accuracy: %f"
                       % (i, accuracy, top_5_accuracy, top_10_accuracy))
-            if model_dir is not None:
-                print("Saving policy model...")
-                self.save(model_dir)
+            # if model_dir is not None:
+            #     print("Saving policy model...")
+            #     self.save(model_dir)
         return [accuracy, top_5_accuracy, top_10_accuracy]
 
     def save(self, save_path):
