@@ -286,7 +286,7 @@ def ai_vs_ai(base_path, save_model):
     player2.is_greedy = True
     run_with_agents(10, player1, player2, model1_path, model2_path, save_model, False)
 
-def ai_vs_human(base_path, load_from_model=True, online_learning=True):
+def ai_vs_human(base_path, load_from_model=True, online_learning=True, train_with_raw_data=False):
     board_size = (15, 15)
     training_data_dir=os.path.join(base_path+"/data")
     player1 = competing_agent.CompetingAgent("player1", board_size, 0.0005, 1, 0.99, training_data_dir)
@@ -295,8 +295,9 @@ def ai_vs_human(base_path, load_from_model=True, online_learning=True):
     if load_from_model and os.path.isfile(os.path.join(model_path+'/checkpoint')):
         print("Loading player1 model...")
         player1.load_model(model_path)
-    # player1.train_model_with_raw_data(training_data_dir, model_path, 300)
-    # player1.save(model_path)
+    if train_with_raw_data:
+        player1.train_model_with_raw_data(training_data_dir, model_path, 100)
+        player1.save_model(model_path)
     # train_agent_with_games(player1, model_path)
     player1.online_learning = online_learning
     player1.is_greedy = True
@@ -346,7 +347,7 @@ def train_agent_with_games(agent: competing_agent.CompetingAgent, sessions, save
 # train_with_games("../history/gomocup-2016/data", "../history/gomocup-2016/model")
 # training.bdt_game.replay_sessions()
 # replay_games()
-ai_vs_human("../history/gomocup-2016-6", True, True)
+ai_vs_human("../history/gomocup-2016-6", True, True, False)
 # ai_vs_human("../history/ai_vs_human", True)
 # ai_vs_ai("../history/ai_vs_ai", True)
 

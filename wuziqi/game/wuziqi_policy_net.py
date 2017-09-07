@@ -25,6 +25,7 @@ class WuziqiPolicyNet(interfaces.IPolicy):
         self.pool_size = [2, 2]
         self.training_epics = 100
         self.cached_training_data = None
+        self.minimum_training_size = 1000
         self.maximum_training_size = 2000
         self.training_data_dir = 'data'
 
@@ -215,6 +216,9 @@ class WuziqiPolicyNet(interfaces.IPolicy):
         self.save_training_data([states, y])
 
         states, y = self.merge_with_cached_training_data([states, y])
+
+        if y.shape[0] < self.minimum_training_size:
+            return [0, 0, 0]
 
         return self.train_with_raw_data(states, y)
 

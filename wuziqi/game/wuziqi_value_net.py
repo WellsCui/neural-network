@@ -25,7 +25,8 @@ class WuziqiQValueNet(interfaces.IActionEvaluator):
         self.kernel_size3 = [3, 3]
         self.pool_size = [2, 2]
         self.training_epics = 100
-        self.minimum_training_size = 100
+        self.minimum_training_size = 1000
+        self.maximum_training_size = 2000
         self.cached_training_data = None
         self.training_data_dir = 'data'
 
@@ -136,7 +137,7 @@ class WuziqiQValueNet(interfaces.IActionEvaluator):
         self.sess = tf.Session()
         self.sess.run(tf.global_variables_initializer())
         self.sess.run(tf.local_variables_initializer())
-        self.maximum_training_size = 2000
+
 
     def evaluate(self, state, action):
         return self.sess.run(self.pred, {self.state_actions: self.build_state_action(state, action),
@@ -169,8 +170,8 @@ class WuziqiQValueNet(interfaces.IActionEvaluator):
 
         # results = np.hstack((results[:candidate_count], results[candidate_count:]))
 
-        for i in range(results.shape[0]):
-            print('     (%d, %d): %f' % (candidate_actions[i].x, candidate_actions[i].y, results[i, 0]))
+        # for i in range(results.shape[0]):
+        #     print('     (%d, %d): %f' % (candidate_actions[i].x, candidate_actions[i].y, results[i, 0]))
 
         chosen = []
         for i in range(suggest_count):
@@ -178,8 +179,8 @@ class WuziqiQValueNet(interfaces.IActionEvaluator):
 
             chosen.append(candidate_actions[max_index[0]])
             results[max_index] = -1
-        for a in chosen:
-            print(' choose (%d, %d)' % (a.x, a.y))
+        # for a in chosen:
+        #     print(' choose (%d, %d)' % (a.x, a.y))
 
 
         return chosen
@@ -235,7 +236,7 @@ class WuziqiQValueNet(interfaces.IActionEvaluator):
             self.save_training_data(new_training_data)
         train_data = self.merge_with_cached_training_data(new_training_data)
 
-        if train_data is None or train_data[1].shape[0] <= self.minimum_training_size:
+        if train_data is None or train_data[1].shape[0] < self.minimum_training_size:
             return 0
 
         state_actions, y = train_data
@@ -374,12 +375,15 @@ class WuziqiQValueNet(interfaces.IActionEvaluator):
             f.close()
             record_count = y.shape[0]
             print("Training value net with %d records..." % record_count)
-            batch_size = 5000
-            batch_count, remain = divmod(record_count, 500)
-            if remain > 0:
-                batch_count += 1
-            for batch in range(batch_count):
-                sample = np.random.choice(record_count, batch_size)
-                self.train_with_raw_data(inputs[sample],
-                                         y[sample],
-                                         self.learning_rate, 50)
+            self.train_with_raw_data(inputs,
+                                     y,
+                                     self.learning_rate, 50)
+            # batch_size = 5000
+            # batch_count, remain = divmod(record_count, 500)
+            # if remain > 0:
+            #     batch_count += 1
+            # for batch in range(batch_count):
+            #     sample = np.random.choice(record_count, batch_size)
+            #     self.train_with_raw_data(inputs[sample],
+            #                              y[sample],
+            #                              self.learning_rate, 50)

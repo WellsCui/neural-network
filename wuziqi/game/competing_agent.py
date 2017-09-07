@@ -25,8 +25,8 @@ class CompetingAgent(interfaces.IAgent):
         self.search_width = 20
         self.policy_training_data = []
         self.value_net_training_data = []
-        self.value_net_training_size = 200
-        self.policy_training_size = 500
+        self.value_net_training_size = 20
+        self.policy_training_size = 20
         self.epsilon = 0.001
         self.greedy_rate = 0.5
         self.board_size = board_size
@@ -107,13 +107,14 @@ class CompetingAgent(interfaces.IAgent):
         state, action, reward = history[-1]
 
         if final_state == 0:
-            val = self.qnet.evaluate(state, action)
-            if val > self.lbd:
-                val = self.lbd
-            result = val * (self.lbd ** (len(history) - 1))
-            # if len(opponent_history) > 0:
-            #     opponent_state, opponent_action, opponent_reward = opponent_history[-1]
-            #     result -= self.qnet.evaluate(opponent_state, opponent_action)
+            result = self.qnet.evaluate(state, action)
+            # if val > self.lbd:
+            #     val = self.lbd
+            # result = val * (self.lbd ** (len(history) - 1))
+            if len(opponent_history) > 0:
+                opponent_state, opponent_action, opponent_reward = opponent_history[-1]
+                result -= self.qnet.evaluate(opponent_state, opponent_action)
+            result *= (self.lbd ** (len(history) - 1))
         else:
             result = final_state * (self.lbd ** (len(history) - 2))
         print("action (%d, %d) len %d rehearsal val: %f , final state: %d" %
@@ -185,8 +186,10 @@ class CompetingAgent(interfaces.IAgent):
 
         random_count = self.search_width - len(direct_neighbor_actions)
         if len(policy_actions) >= random_count:
-            random_actions = np.ndarray.tolist(np.random.choice(policy_actions, random_count))
+            # random_actions = np.ndarray.tolist(np.random.choice(policy_actions, random_count))
+            random_actions = policy_actions[:random_count]
             return random_actions, direct_neighbor_actions + random_actions
+
         else:
             random_count -= len(policy_actions)
             chosen_actions = direct_neighbor_actions + policy_actions
@@ -218,8 +221,8 @@ class CompetingAgent(interfaces.IAgent):
 
         def get_action_from_policy(policy, environment, last_action):
             _, candidate_actions = self.get_candidate_actions(environment, policy, last_action)
-            print(" suggestion with environment last action (%d, %d) last action (%d, %d)"
-                  % (environment.last_action.x, environment.last_action.y, last_action.x, last_action.y))
+            # print(" suggestion with environment last action (%d, %d) last action (%d, %d)"
+            #       % (environment.last_action.x, environment.last_action.y, last_action.x, last_action.y))
             return self.qnet.suggest(environment, candidate_actions, 1)[0]
             # return policy.suggest(environment.get_state(), self.side, 1)[0]
 
@@ -245,12 +248,12 @@ class CompetingAgent(interfaces.IAgent):
         final_state = 0
         next_action_2 = environment.last_action.reverse()
 
-        print("Rehearsal with action (%d, %d)" % (action.x, action.y))
+        # print("Rehearsal with action (%d, %d)" % (action.x, action.y))
 
         while steps > 0:
             steps -= 1
             environment.update(next_action_1)
-            environment.show()
+            # environment.show()
             r1 = get_reward(self.side)
             history1.append([next_state_1, next_action_1, r1])
             if environment.is_ended():
@@ -269,7 +272,7 @@ class CompetingAgent(interfaces.IAgent):
                 next_action_2 = get_action_from_policy(opponent_policy, reversed_environment, next_action_2)
 
                 state = environment.update(next_action_2.reverse()).copy()
-                environment.show()
+                # environment.show()
                 r2 = get_reward(self.side * -1)
                 history2.append([next_state_2, next_action_2, r2])
 
