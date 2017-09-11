@@ -1,5 +1,6 @@
 import random
 import numpy as np
+import logging
 import game.interfaces as interfaces
 import game.wuziqi as wuziqi
 import game.utils
@@ -21,12 +22,12 @@ class CompetingAgent(interfaces.IAgent):
         self.qnet.training_data_dir = training_data_dir
         self.mode = "online_learning."
         self.lbd = lbd
-        self.search_depth = 5
+        self.search_depth = 4
         self.search_width = 20
         self.policy_training_data = []
         self.value_net_training_data = []
-        self.value_net_training_size = 20
-        self.policy_training_size = 20
+        self.value_net_training_size = 100
+        self.policy_training_size = 100
         self.epsilon = 0.001
         self.greedy_rate = 0.5
         self.board_size = board_size
@@ -35,6 +36,7 @@ class CompetingAgent(interfaces.IAgent):
         self.qnet_error = 1
         self.policy_accuracy = [0, 0, 0]
         self.online_learning = True
+        self.logger = logging.root
 
     def print_actions_value(self, environment: interfaces.IEnvironment, actions):
         for a in actions:
@@ -59,9 +61,6 @@ class CompetingAgent(interfaces.IAgent):
 
         best_action = self.choose_best_action_from_rehearsals(rehearsals, reversed_rehearsals)
 
-        # if self.qnet_error < 0.0005:
-        #     self.policy_training_data.append([state, best_action])
-
         # self.print_actions_value(environment, policy_actions)
 
         opponent_last_action = reversed_environment.last_action
@@ -73,34 +72,26 @@ class CompetingAgent(interfaces.IAgent):
         else:
             action = game.utils.partial_random(best_action, candidates, self.greedy_rate)
 
-        print("%s: opponent_action_val: %f best (%d, %d): %f, in policy actions: %d, %s,  actual (%d, %d): %f best: %s" %
-              (self.name,
-               opponent_action_value,
-               best_action.x, best_action.y,
-               self.qnet.evaluate(state, best_action),
-               len(policy_actions),
-               self.contain_action(policy_actions, best_action),
-               action.x, action.y,
-               self.qnet.evaluate(state, action),
-               action == best_action))
+        self.logger.info(
+            "%s: opponent_action_val: %f best (%d, %d): %f, in policy actions: %d, %s,  actual (%d, %d): %f best: %s",
+            self.name,
+            opponent_action_value,
+            best_action.x, best_action.y,
+            self.qnet.evaluate(state, best_action),
+            len(policy_actions),
+            self.contain_action(policy_actions, best_action),
+            action.x, action.y,
+            self.qnet.evaluate(state, action),
+            action == best_action)
         if self.online_learning:
-            self.learn_from_rehearsals(rehearsals + reversed_rehearsals)
+            self.learn_from_sessions(rehearsals + reversed_rehearsals)
         self.last_action = action
         environment.update(self.last_action)
         return self.last_action
 
     def increase_greedy(self):
         self.greedy_rate += (1 - self.greedy_rate) * self.epsilon
-        print("greedy : ", self.greedy_rate)
-
-    def learn(self, current_state, current_action, r, next_state, next_action):
-        qnet_value = self.qnet.evaluate(current_state, current_action)[0, 0]
-        corrected_qnet_value = r + self.lbd * self.qnet.evaluate(next_state, next_action)[0, 0]
-        print("Estimate : ", qnet_value,
-              " reward: ", r,
-              " Corrected", corrected_qnet_value)
-        self.qnet.apply_gradient(current_state, current_action, r, next_state, next_action)
-        self.policy.apply_gradient(current_state, current_action, corrected_qnet_value)
+        self.logger.info("greedy : %s", self.greedy_rate)
 
     def evaluate_rehearsal(self, rehearsal):
         history, opponent_history, final_state = rehearsal
@@ -108,27 +99,28 @@ class CompetingAgent(interfaces.IAgent):
 
         if final_state == 0:
             result = self.qnet.evaluate(state, action)
-            # if val > self.lbd:
-            #     val = self.lbd
-            # result = val * (self.lbd ** (len(history) - 1))
-            if len(opponent_history) > 0:
-                opponent_state, opponent_action, opponent_reward = opponent_history[-1]
-                result -= self.qnet.evaluate(opponent_state, opponent_action)
+            # if result > self.lbd:
+            #     result = self.lbd
+            # if len(opponent_history) > 0:
+            #     opponent_state, opponent_action, opponent_reward = opponent_history[-1]
+            #     result -= self.qnet.evaluate(opponent_state, opponent_action)
             result *= (self.lbd ** (len(history) - 1))
-        else:
+        elif final_state == 1:
             result = final_state * (self.lbd ** (len(history) - 2))
-        print("action (%d, %d) len %d rehearsal val: %f , final state: %d" %
-              (history[0][1].x,  history[0][1].y, len(history), result, final_state))
+        else:
+            result = final_state * (self.lbd ** (len(opponent_history) - 2))
+        self.logger.debug("action (%d, %d) len %d rehearsal val: %f , final state: %d",
+                          history[0][1].x, history[0][1].y, len(history), result, final_state)
 
         def print_steps():
             action_str = []
             for s, a, r in history:
                 action_str.append('(%d, %d)' % (a.x, a.y))
-            print(' '.join(action_str))
+            self.logger.debug(' '.join(action_str))
             action_str = []
             for s, a, r in opponent_history:
                 action_str.append('(%d, %d)' % (a.x, a.y))
-            print(' '.join(action_str))
+            self.logger.debug(' '.join(action_str))
 
         print_steps()
         return result
@@ -181,7 +173,8 @@ class CompetingAgent(interfaces.IAgent):
         policy_actions = [a for a in
                           self.merge_actions(policy.suggest(environment.get_state(), self.side, select_count),
                                              policy.suggest(environment.reverse().get_state(), self.side, select_count))
-                          if self.contain_action(neighbor_actions, a) and
+                          if
+                          self.contain_action(neighbor_actions, a) and
                           not self.contain_action(direct_neighbor_actions, a)]
 
         random_count = self.search_width - len(direct_neighbor_actions)
@@ -221,11 +214,20 @@ class CompetingAgent(interfaces.IAgent):
 
         def get_action_from_policy(policy, environment, last_action):
             _, candidate_actions = self.get_candidate_actions(environment, policy, last_action)
-            # print(" suggestion with environment last action (%d, %d) last action (%d, %d)"
-            #       % (environment.last_action.x, environment.last_action.y, last_action.x, last_action.y))
-            return self.qnet.suggest(environment, candidate_actions, 1)[0]
-            # return policy.suggest(environment.get_state(), self.side, 1)[0]
 
+            proposed_action = self.qnet.suggest(environment, candidate_actions, 1)[0]
+            if self.logger.level == logging.DEBUG:
+                action_string = ['(%d, %d)' % (a.x, a.y) for a in candidate_actions]
+                self.logger.debug(" suggestion candidates: %s", ','.join(action_string))
+
+                self.logger.debug(
+                    " suggestion with environment last action (%d, %d) side %d last action (%d, %d) side %d proposed action (%d, %d)",
+                    environment.last_action.x, environment.last_action.y, environment.last_action.val,
+                    last_action.x, last_action.y, last_action.val,
+                    proposed_action.x, proposed_action.y)
+            return proposed_action
+
+            # return policy.suggest(environment.get_state(), self.side, 1)[0]
 
             # neighbor_actions = self.get_neighbor_actions(environment, last_action)
             # policy_actions = policy.suggest(environment.get_state(), self.side, self.search_width)
@@ -248,12 +250,16 @@ class CompetingAgent(interfaces.IAgent):
         final_state = 0
         next_action_2 = environment.last_action.reverse()
 
-        # print("Rehearsal with action (%d, %d)" % (action.x, action.y))
+        self.logger.debug("Rehearsal with action (%d, %d), last opponent action (%d, %d)",
+                          action.x, action.y, next_action_2.x, next_action_2.y)
+        if self.logger.level == logging.DEBUG:
+            environment.show()
 
         while steps > 0:
             steps -= 1
             environment.update(next_action_1)
-            # environment.show()
+            if self.logger.level == logging.DEBUG:
+                environment.show()
             r1 = get_reward(self.side)
             history1.append([next_state_1, next_action_1, r1])
             if environment.is_ended():
@@ -272,7 +278,8 @@ class CompetingAgent(interfaces.IAgent):
                 next_action_2 = get_action_from_policy(opponent_policy, reversed_environment, next_action_2)
 
                 state = environment.update(next_action_2.reverse()).copy()
-                # environment.show()
+                if self.logger.level == logging.DEBUG:
+                    environment.show()
                 r2 = get_reward(self.side * -1)
                 history2.append([next_state_2, next_action_2, r2])
 
@@ -302,10 +309,10 @@ class CompetingAgent(interfaces.IAgent):
             return [[state * -1, action.reverse(), reward] for state, action, reward in h]
         history, opponent_history, final_result = experience
         session = history, reverse_history(opponent_history), final_result
-        return self.learn_from_session(session, learn_from_winner)
+        return self.learn_from_sessions([session], learn_from_winner)
 
     def train_model_with_raw_data(self, train_dir, model_dir, epics):
-        print('training model with raw data...')
+        self.logger.info('training model with raw data...')
         self.policy.training_data_dir = train_dir
         self.qnet.training_data_dir = train_dir
         self.qnet.training_epics = epics
@@ -316,16 +323,24 @@ class CompetingAgent(interfaces.IAgent):
     def choose_best_action_from_rehearsals(self, rehearsals, reversed_rehearsals):
         rs = rehearsals+reversed_rehearsals
         vals = [self.evaluate_rehearsal(item) for item in rs]
-        index = np.argmax(vals)
-        instance = rs[index]
-        return instance[0][0][1]
+        max_index = np.argmax(vals)
+        min_index = np.argmin(vals)
+        max_val = vals[max_index]
+        min_val = vals[min_index]
+        if min_val < 0 and max_val > 0 and min_val + max_val < 0:
+            instance = rs[min_index]
+            return instance[1][0][1]
+        else:
+            instance = rs[max_index]
+            return instance[0][0][1]
 
-    def learn_value_net_from_session(self, session):
-        history, opponent_history, final_state = session
-        if final_state == 1:
-            self.value_net_training_data.append(history)
-        elif final_state == -1:
-            self.value_net_training_data.append(opponent_history)
+    def learn_value_net_from_sessions(self, sessions):
+        for session in sessions:
+            history, opponent_history, final_state = session
+            if final_state == 1:
+                self.value_net_training_data.append(history)
+            elif final_state == -1:
+                self.value_net_training_data.append(opponent_history)
 
         # if self.qnet_error > 0.00001:
         #     if final_state == 1:
@@ -346,27 +361,28 @@ class CompetingAgent(interfaces.IAgent):
         else:
             return False
 
-    def learn_policy_net_from_session(self, session, learn_from_winner=False):
-        history, opponent_history, final_state = session
-        if final_state == 1:
-            winning_state, winning_action, _ = history[-2]
-            if learn_from_winner:
-                for s, a, r in history[:-1]:
-                    self.policy_training_data.append([s, a])
-            else:
-                self.policy_training_data.append([winning_state, winning_action])
-            if len(opponent_history) > 1:
-                failing_state, failing_action, _ = opponent_history[-2]
+    def learn_policy_net_from_sessions(self, sessions, learn_from_winner=False):
+        for session in sessions:
+            history, opponent_history, final_state = session
+            if final_state == 1:
+                winning_state, winning_action, _ = history[-2]
+                if learn_from_winner:
+                    for s, a, r in history[:-1]:
+                        self.policy_training_data.append([s, a])
+                else:
+                    self.policy_training_data.append([winning_state, winning_action])
+                if len(opponent_history) > 1:
+                    failing_state, failing_action, _ = opponent_history[-2]
+                    self.policy_training_data.append([failing_state, winning_action])
+            elif final_state == -1:
+                winning_state, winning_action, _ = opponent_history[-2]
+                if learn_from_winner:
+                    for s, a, r in opponent_history[:-1]:
+                        self.policy_training_data.append([s, a])
+                else:
+                    self.policy_training_data.append([winning_state, winning_action])
+                failing_state, failing_action, _ = history[-2]
                 self.policy_training_data.append([failing_state, winning_action])
-        elif final_state == -1:
-            winning_state, winning_action, _ = opponent_history[-2]
-            if learn_from_winner:
-                for s, a, r in opponent_history[:-1]:
-                    self.policy_training_data.append([s, a])
-            else:
-                self.policy_training_data.append([winning_state, winning_action])
-            failing_state, failing_action, _ = history[-2]
-            self.policy_training_data.append([failing_state, winning_action])
 
         if len(self.policy_training_data) > self.policy_training_size:
             self.policy_accuracy = self.policy.train(self.policy_net_learning_rate, self.policy_training_data)
@@ -377,10 +393,6 @@ class CompetingAgent(interfaces.IAgent):
         else:
             return False
 
-    def learn_from_session(self, session, learn_from_winner=False):
-        return self.learn_value_net_from_session(session) \
-               or self.learn_policy_net_from_session(session, learn_from_winner)
-
-    def learn_from_rehearsals(self, rehearsals):
-        for session in rehearsals:
-            self.learn_from_session(session, False)
+    def learn_from_sessions(self, sessions, learn_from_winner=False):
+        return self.learn_value_net_from_sessions(sessions) \
+               or self.learn_policy_net_from_sessions(sessions, learn_from_winner)

@@ -1,5 +1,5 @@
 import numpy as np
-
+import logging
 import os
 import tensorflow as tf
 from tensorflow.contrib import learn
@@ -29,6 +29,7 @@ class WuziqiQValueNet(interfaces.IActionEvaluator):
         self.maximum_training_size = 2000
         self.cached_training_data = None
         self.training_data_dir = 'data'
+        self.logger = logging.root
 
         input_layer = tf.reshape(
             self.state_actions, [-1, board_size[0], board_size[1], 2],
@@ -162,6 +163,10 @@ class WuziqiQValueNet(interfaces.IActionEvaluator):
             env.update(a)
             if env.eval_state() == 1:
                 return [a]
+            env = environment.reverse().clone()
+            env.update(a)
+            if env.eval_state() == 1:
+                return [a]
 
         evaluate_data = [self.build_state_action(state, action) for action in candidate_actions]
 
@@ -224,7 +229,7 @@ class WuziqiQValueNet(interfaces.IActionEvaluator):
         #                                                    self.mode: learn.ModeKeys.EVAL})
 
         index = np.where((y - predicted_y) > (y * (1 - self.lbd)/2))[0]
-        print("recall records: %s in %s" % (index.shape[0], y.shape[0]))
+        self.logger.info("recall records: %s in %s", (index.shape[0], y.shape[0]))
         self.cached_training_data = [state_actions[index], y[index]]
 
         # result = np.append(predicted_y[index], y[index], axis=1)
@@ -243,14 +248,14 @@ class WuziqiQValueNet(interfaces.IActionEvaluator):
         return self.train_with_raw_data(state_actions, y, learning_rate)
 
     def train_with_raw_data(self, state_actions, y, learning_rate, log_epic=50):
-        print("Value-Net learning rate: %f train_size: %d" % (learning_rate, state_actions.shape[0]))
+        self.logger.info("Value-Net learning rate: %f train_size: %d", learning_rate, state_actions.shape[0])
 
         def eval_epic(epic, loss):
-            print("epic %d: %f " % (epic, loss))
+            self.logger.info("epic %d: %f ", epic, loss)
             vals = self.sess.run(self.pred, {self.state_actions: state_actions[0:20],
                                              self.mode: learn.ModeKeys.EVAL})
             result = np.append(vals, np.reshape(y[0:20], vals.shape), axis=1)
-            print(result)
+            self.logger.info(result)
 
         # loss = self.sess.run(self.loss,
         #                      {self.state_actions: state_actions,
@@ -374,7 +379,7 @@ class WuziqiQValueNet(interfaces.IActionEvaluator):
             y = np.array([x for x in f.root.train_output.iterrows()])
             f.close()
             record_count = y.shape[0]
-            print("Training value net with %d records..." % record_count)
+            self.logger.info("Training value net with %d records...", record_count)
             self.train_with_raw_data(inputs,
                                      y,
                                      self.learning_rate, 50)
