@@ -6,4 +6,5 @@ It is a Stanford online course assigments for Convolutional Neural Networks
 for Visual Recognition http://cs231n.stanford.edu/
 
 ## WUZIQI
-It is a deep reinforce learning for board game project
+It is a deep reinforce learning project training agent to play Gomoku an abstract strategy board game. 
+Here is the link of Gomoku https://en.wikipedia.org/wiki/Gomoku
