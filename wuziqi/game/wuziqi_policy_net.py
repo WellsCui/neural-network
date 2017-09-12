@@ -1,5 +1,6 @@
 import numpy as np
 import os
+import logging
 import tables
 import tensorflow as tf
 from tensorflow.contrib import learn
@@ -28,6 +29,7 @@ class WuziqiPolicyNet(interfaces.IPolicy):
         self.minimum_training_size = 1000
         self.maximum_training_size = 2000
         self.training_data_dir = 'data'
+        self.logger = logging.root
 
         input_layer = tf.reshape(
             self.state, [-1, board_size[0], board_size[1], 1], name=name+"policy_input_layer")
@@ -236,8 +238,8 @@ class WuziqiPolicyNet(interfaces.IPolicy):
                                                                           self.y: y,
                                                                           self.mode: learn.ModeKeys.TRAIN})
             if (i + 1) % log_epic == 0 or i == 0:
-                print("epic %d policy accuracy: %f top_5_accuracy: %f , top_10_accuracy: %f"
-                      % (i, accuracy, top_5_accuracy, top_10_accuracy))
+                self.logger.debug("epic %d policy accuracy: %f top_5_accuracy: %f , top_10_accuracy: %f",
+                                  i, accuracy, top_5_accuracy, top_10_accuracy)
             # if model_dir is not None:
             #     print("Saving policy model...")
             #     self.save(model_dir)

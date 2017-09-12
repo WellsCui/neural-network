@@ -83,9 +83,9 @@ class CompetingAgent(interfaces.IAgent):
             result = self.qnet.evaluate(state, action)
             # if result > self.lbd:
             #     result = self.lbd
-            # if len(opponent_history) > 0:
-            #     opponent_state, opponent_action, opponent_reward = opponent_history[-1]
-            #     result -= self.qnet.evaluate(opponent_state, opponent_action)
+            if len(opponent_history) > 0:
+                opponent_state, opponent_action, opponent_reward = opponent_history[-1]
+                result -= self.qnet.evaluate(opponent_state, opponent_action)
             result *= (self.lbd ** (len(history) - 1))
         elif final_state == 1:
             result = final_state * (self.lbd ** (len(history) - 2))
