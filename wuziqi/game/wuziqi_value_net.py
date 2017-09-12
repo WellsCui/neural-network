@@ -216,6 +216,7 @@ class WuziqiQValueNet(interfaces.IActionEvaluator):
                 np.vstack((self.cached_training_data[1], training_data[1]))]
 
         data_length = self.cached_training_data[0].shape[0]
+        self.logger.debug("size of value net cached training data: %d", data_length)
 
         if data_length > self.maximum_training_size:
             self.cached_training_data = [
@@ -225,15 +226,9 @@ class WuziqiQValueNet(interfaces.IActionEvaluator):
         return self.cached_training_data
 
     def recall_training_data(self, state_actions, y, predicted_y):
-        # predicted_y = self.lbd * self.sess.run(self.pred, {self.state_actions: state_actions,
-        #                                                    self.mode: learn.ModeKeys.EVAL})
-
         index = np.where((y - predicted_y) > (y * (1 - self.lbd)/2))[0]
         self.logger.info("recall records: %s in %s", (index.shape[0], y.shape[0]))
         self.cached_training_data = [state_actions[index], y[index]]
-
-        # result = np.append(predicted_y[index], y[index], axis=1)
-        # print(result)
 
     def train(self, learning_rate, data):
         new_training_data = self.build_td_training_data(data)
@@ -257,16 +252,6 @@ class WuziqiQValueNet(interfaces.IActionEvaluator):
             result = np.append(vals, np.reshape(y[0:20], vals.shape), axis=1)
             self.logger.info(result)
 
-        # loss = self.sess.run(self.loss,
-        #                      {self.state_actions: state_actions,
-        #                       self.y: y,
-        #                       self.mode: learn.ModeKeys.TRAIN})
-        # if loss < 0.00005:
-        #     return loss
-
-        # eval_epic(-1, loss)
-
-        # optimizer = tf.train.GradientDescentOptimizer(learning_rate).minimize(self.loss)
         for i in range(self.training_epics):
             pred, loss, _ = self.sess.run([self.pred, self.loss, self.optimizer],
                                           {self.state_actions: state_actions,

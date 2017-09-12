@@ -218,6 +218,7 @@ class WuziqiPolicyNet(interfaces.IPolicy):
         self.save_training_data([states, y])
 
         states, y = self.merge_with_cached_training_data([states, y])
+        self.logger.debug("size of policy net cached training data: %d", y.shape[0])
 
         if y.shape[0] < self.minimum_training_size:
             return [0, 0, 0]
@@ -225,7 +226,7 @@ class WuziqiPolicyNet(interfaces.IPolicy):
         return self.train_with_raw_data(states, y)
 
     def train_with_raw_data(self, states, y, log_epic=50, model_dir=None):
-        print("Policy-Net learning rate: %f training size %s" % (self.learning_rate, y.shape))
+        self.logger.debug("Policy-Net learning rate: %f training size %s", self.learning_rate, y.shape)
 
         accuracy, top_5_accuracy, top_10_accuracy = [0, 0, 0]
 

@@ -22,12 +22,12 @@ class CompetingAgent(interfaces.IAgent):
         self.qnet.training_data_dir = training_data_dir
         self.mode = "online_learning."
         self.lbd = lbd
-        self.search_depth = 3
+        self.search_depth = 5
         self.search_width = 20
         self.policy_training_data = []
         self.value_net_training_data = []
-        self.value_net_training_size = 100
-        self.policy_training_size = 100
+        self.value_net_training_size = 20
+        self.policy_training_size = 20
         self.epsilon = 0.001
         self.greedy_rate = 0.5
         self.board_size = board_size
@@ -392,5 +392,6 @@ class CompetingAgent(interfaces.IAgent):
             return False
 
     def learn_from_sessions(self, sessions, learn_from_winner=False):
+        self.logger.info("Learning from sessions...")
         return self.learn_value_net_from_sessions(sessions) \
                or self.learn_policy_net_from_sessions(sessions, learn_from_winner)
