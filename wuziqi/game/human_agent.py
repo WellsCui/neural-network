@@ -1,5 +1,7 @@
 import game.interfaces as interfaces
 import game.wuziqi as wuziqi
+import sys
+
 
 
 class HumanAgent(interfaces.IAgent):
@@ -12,6 +14,9 @@ class HumanAgent(interfaces.IAgent):
         while action is None:
             try:
                 pos = eval(input('Enter your next move:'))
+                if pos == 'q':
+                    sys.exit()
+
                 if environment.get_state()[pos[1], pos[0]] != 0:
                     print("Your move is invalid.")
                 else:

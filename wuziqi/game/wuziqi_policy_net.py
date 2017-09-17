@@ -24,10 +24,10 @@ class WuziqiPolicyNet(interfaces.IPolicy):
         self.kernel_size2 = [3, 3]
         self.kernel_size3 = [3, 3]
         self.pool_size = [2, 2]
-        self.training_epics = 100
+        self.training_epics = 50
         self.cached_training_data = None
-        self.minimum_training_size = 1000
-        self.maximum_training_size = 2000
+        self.minimum_training_size = 200
+        self.maximum_training_size = 10000
         self.training_data_dir = 'data'
         self.logger = logging.root
 

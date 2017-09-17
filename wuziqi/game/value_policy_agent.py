@@ -4,11 +4,11 @@ import logging
 import game.interfaces as interfaces
 import game.wuziqi as wuziqi
 import game.utils
-import game.wuziqi_action_value_net
+import game.wuziqi_value_net
 import game.wuziqi_policy_net
 
 
-class CompetingAgent(interfaces.IAgent):
+class ValuePolicyAgent(interfaces.IAgent):
     def __init__(self, name, board_size, initial_learning_rate, side, lbd, training_data_dir='data'):
         self.name = name
         self.side = side
@@ -17,7 +17,7 @@ class CompetingAgent(interfaces.IAgent):
         self.minimum_learning_rate = 0.0004
         self.learning_rate_dacade_rate = 0.6
         self.policy = game.wuziqi_policy_net.WuziqiPolicyNet(name + "_", board_size, initial_learning_rate, lbd)
-        self.qnet = game.wuziqi_action_value_net.WuziqiActionValueNet(name + "_", board_size, initial_learning_rate, lbd)
+        self.qnet = game.wuziqi_value_net.WuziqiValueNet(name + "_", board_size, initial_learning_rate, lbd)
         self.policy.training_data_dir = training_data_dir
         self.qnet.training_data_dir = training_data_dir
         self.mode = "online_learning."
@@ -167,7 +167,7 @@ class CompetingAgent(interfaces.IAgent):
 
     @staticmethod
     def merge_actions(p1, p2):
-        return p1 + [p for p in p2 if not CompetingAgent.contain_action(p1, p)]
+        return p1 + [p for p in p2 if not ValuePolicyAgent.contain_action(p1, p)]
 
     def get_neighbor_actions(self, environment: interfaces.IEnvironment, last_action, radius=5):
         def pos_to_action(pos: wuziqi.Position):
@@ -394,4 +394,4 @@ class CompetingAgent(interfaces.IAgent):
     def learn_from_sessions(self, sessions, learn_from_winner=False):
         self.logger.info("Learning from sessions...")
         self.learn_value_net_from_sessions(sessions)
-        self.learn_policy_net_from_sessions(sessions, learn_from_winner)
+        # self.learn_policy_net_from_sessions(sessions, learn_from_winner)

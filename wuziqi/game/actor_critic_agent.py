@@ -1,11 +1,11 @@
-import game.wuziqi_value_net as qlearning
+import game.wuziqi_action_value_net as qlearning
 import game.interfaces as interfaces
 
 class ActorCriticAgent(interfaces.IAgent):
     def __init__(self, board_size, learning_rate, side, lbd):
         self.side = side
         self.policy = qlearning.WuziqiPolicyNet(board_size, learning_rate, lbd)
-        self.qnet = qlearning.WuziqiQValueNet(board_size, learning_rate, lbd)
+        self.qnet = qlearning.WuziqiActionValueNet(board_size, learning_rate, lbd)
         self.mode = "online_learning."
         self.lbd = lbd
 

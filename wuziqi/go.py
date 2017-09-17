@@ -8,6 +8,7 @@ import game.agents as agents
 import game.evaluators as evaluators
 import game.actor_critic_agent as ac_agent
 import game.competing_agent as competing_agent
+import game.value_policy_agent as value_policy_agent
 import game.human_agent as human_agent
 import game.interfaces as interfaces
 import training.bdt_game
@@ -337,12 +338,35 @@ def ai_vs_human(base_path, load_from_model=True, online_learning=True, train_wit
     run_with_agents(10, player1, human_player, model_path, model_path, online_learning, True)
 
 
-def train_with_games(training_data_dir, model_dir):
+def ai2_vs_human(base_path, load_from_model=True, online_learning=True, train_with_raw_data=False):
     board_size = (15, 15)
-    player1 = competing_agent.CompetingAgent("player1", board_size, 0.0005, 1, 0.99)
+    training_data_dir = os.path.join(base_path + "/data")
+    player1 = value_policy_agent.ValuePolicyAgent("player1", board_size, 0.0005, 1, 0.99, training_data_dir)
+
+    human_player = human_agent.HumanAgent("human", -1)
+    model_path = os.path.join(base_path + "/model")
+    if load_from_model and os.path.isfile(os.path.join(model_path + '/checkpoint')):
+        print("Loading player1 model...")
+        player1.load_model(model_path)
+    if train_with_raw_data:
+        player1.train_model_with_raw_data(training_data_dir, model_path, 100)
+        player1.save_model(model_path)
+    # train_agent_with_games(player1, model_path)
+    player1.online_learning = online_learning
+    player1.is_greedy = True
+    run_with_agents(10, player1, human_player, model_path, model_path, online_learning, True)
+
+
+def train_with_games(training_data_dir, model_dir, is_value_policy_agent=False):
+    board_size = (15, 15)
+    if is_value_policy_agent:
+        player1 = value_policy_agent.ValuePolicyAgent("player1", board_size, 0.0005, 1, 0.99)
+    else:
+        player1 = competing_agent.CompetingAgent("player1", board_size, 0.0005, 1, 0.99)
     player1.qnet.training_data_dir = training_data_dir
     player1.policy.training_data_dir = training_data_dir
     train_agent_with_games(player1, training.bdt_game.get_sessions('data/gomocup-2016.bdt'), model_dir)
+
 
 def train_with_raw_data(training_data_dir, model_dir):
     board_size = (15, 15)
@@ -353,25 +377,14 @@ def train_with_raw_data(training_data_dir, model_dir):
     player1.train_model_with_raw_data(training_data_dir, model_dir, 300)
     player1.save_model(model_dir)
 
-def train_agent_with_games(agent: competing_agent.CompetingAgent, sessions, save_dir):
+
+def train_agent_with_games(agent, sessions, save_dir):
     finished_sessions = (s for s in sessions if s[2] != 0)
-    # unfinished_sessions = [s for s in sessions if s[2] == 0]
-    # print("Training agent %s with %d finished sessions in %d session" % (agent.name, len(finished_sessions), len(sessions)))
-    i = 0
+    agent.learn_from_sessions(finished_sessions, True)
+    print("Saving model...")
+    agent.save_model(save_dir)
 
-    def train_with_sessions(train_sessions, session_id):
-        for session in train_sessions:
-            session_id += 1
-            print("Training agent %s with session: %d" % (agent.name, session_id))
-            if agent.learn_from_sessions(session, True):
-                print("Saving model...")
-                agent.save_model(save_dir)
-        return i
-
-    i = train_with_sessions(finished_sessions, 0)
-    # train_with_sessions(unfinished_sessions, i)
-
-set_logging(logging.DEBUG)
+set_logging(logging.INFO)
 # training.bdt_game.replay_games('data/gomocup-2016.bdt')
 # training.psq_game.convert_psq_files('../history/standard', 'data/gomocup-2016.bdt')
 # train_with_games("/output/data", "/output/model")
@@ -380,7 +393,10 @@ set_logging(logging.DEBUG)
 # train_with_games("../history/gomocup-2016/data", "../history/gomocup-2016/model")
 # training.bdt_game.replay_sessions()
 # replay_games()
-ai_vs_human("../history/gomocup-2016-6", True, True, False)
+# ai_vs_human("../history/gomocup-2016-6", True, True, False)
+
+# train_with_games("../history/gomocup-2016-ai2/data", "../history/gomocup-2016-ai2/model", True)
+ai2_vs_human("../history/gomocup-2016-ai2", True, False, False)
 # ai_vs_human("../history/ai_vs_human", True)
 # ai_vs_ai("../history/ai_vs_ai", True)
 
