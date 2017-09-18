@@ -34,9 +34,9 @@ class WuziqiActionValueNet(interfaces.IActionEvaluator):
 
         input_layer = tf.reshape(
             self.state_actions, [-1, board_size[0], board_size[1], 2],
-            name=name + "action_value_net_input_layer")
+            name=name + "value_net_input_layer")
         conv1 = tf.layers.conv2d(
-            name=name + "action_value_net_conv1",
+            name=name + "value_net_conv1",
             inputs=input_layer,
             filters=96,
             kernel_size=self.kernel_size1,
@@ -44,7 +44,7 @@ class WuziqiActionValueNet(interfaces.IActionEvaluator):
             activation=tf.nn.relu)
 
         conv2 = tf.layers.conv2d(
-            name=name + "action_value_net_conv2",
+            name=name + "value_net_conv2",
             inputs=conv1,
             filters=96,
             kernel_size=self.kernel_size1,
@@ -52,13 +52,13 @@ class WuziqiActionValueNet(interfaces.IActionEvaluator):
             activation=tf.nn.relu)
 
         pool2 = tf.layers.max_pooling2d(
-            name=name + "action_value_net_pool2",
+            name=name + "value_net_pool2",
             inputs=conv2,
             pool_size=self.pool_size,
             strides=1)
 
         conv3 = tf.layers.conv2d(
-            name=name + "action_value_net_conv3",
+            name=name + "value_net_conv3",
             inputs=pool2,
             filters=128,
             kernel_size=self.kernel_size2,
@@ -66,7 +66,7 @@ class WuziqiActionValueNet(interfaces.IActionEvaluator):
             activation=tf.nn.relu)
 
         conv4 = tf.layers.conv2d(
-            name=name + "action_value_net_conv4",
+            name=name + "value_net_conv4",
             inputs=conv3,
             filters=128,
             kernel_size=self.kernel_size2,
@@ -74,13 +74,13 @@ class WuziqiActionValueNet(interfaces.IActionEvaluator):
             activation=tf.nn.relu)
 
         pool4 = tf.layers.max_pooling2d(
-            name=name + "action_value_net_pool4",
+            name=name + "value_net_pool4",
             inputs=conv4,
             pool_size=self.pool_size,
             strides=1)
 
         conv5 = tf.layers.conv2d(
-            name=name + "action_value_net_conv5",
+            name=name + "value_net_conv5",
             inputs=pool4,
             filters=256,
             kernel_size=self.kernel_size2,
@@ -88,7 +88,7 @@ class WuziqiActionValueNet(interfaces.IActionEvaluator):
             activation=tf.nn.relu)
 
         conv6 = tf.layers.conv2d(
-            name=name + "action_value_net_conv6",
+            name=name + "value_net_conv6",
             inputs=conv5,
             filters=512,
             kernel_size=self.kernel_size3,
@@ -96,13 +96,13 @@ class WuziqiActionValueNet(interfaces.IActionEvaluator):
             activation=tf.nn.relu)
 
         pool6 = tf.layers.max_pooling2d(
-            name=name + "action_value_net_pool6",
+            name=name + "value_net_pool6",
             inputs=conv6,
             pool_size=self.pool_size,
             strides=1)
 
         # conv7 = tf.layers.conv2d(
-        #     name=name + "action_value_net_conv7",
+        #     name=name + "value_net_conv7",
         #     inputs=pool6,
         #     filters=512,
         #     kernel_size=self.kernel_size3,
@@ -114,15 +114,15 @@ class WuziqiActionValueNet(interfaces.IActionEvaluator):
         #
         # flat_size = w * h * 512
         flat_size = 2048
-        pool_flat = tf.reshape(pool6, [-1, flat_size], name=name + "action_value_net_pool_flat")
+        pool_flat = tf.reshape(pool6, [-1, flat_size], name=name + "value_net_pool_flat")
         dropout = tf.layers.dropout(
-            name=name + "action_value_net_dropout",
+            name=name + "value_net_dropout",
             inputs=pool_flat, rate=0.8, training=self.mode == learn.ModeKeys.TRAIN)
         dense = tf.layers.dense(
-            inputs=dropout, units=2048, activation=tf.nn.relu, name=name + "action_value_net_dense")
+            inputs=dropout, units=2048, activation=tf.nn.relu, name=name + "value_net_dense")
 
         self.pred = tf.layers.dense(
-            inputs=dense, units=1, name=name + "action_value_net_pred")
+            inputs=dense, units=1, name=name + "value_net_pred")
 
         # Mean squared error
         # loss = tf.reduce_sum(tf.pow(self.pred - self.y, 2)) / (2 * batch_size)
@@ -135,7 +135,8 @@ class WuziqiActionValueNet(interfaces.IActionEvaluator):
 
         # print("trainable_variables:", tf.trainable_variables())
         self.saver = tf.train.Saver()
-        self.optimizer = tf.train.AdamOptimizer(learning_rate, name="action_value_net_Optimizer").minimize(self.loss)
+        self.optimizer = tf.train.AdamOptimizer(learning_rate, name="QNet_Optimizer").minimize(self.loss)
+
         self.sess = tf.Session()
         self.sess.run(tf.global_variables_initializer())
         self.sess.run(tf.local_variables_initializer())
