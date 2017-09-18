@@ -72,8 +72,12 @@ def convert_psq_files(psq_dir, bdt_file):
     games = []
     for file in os.listdir(psq_dir):
         if file.endswith(".psq"):
-            games.append(convert_psq_to_bdt(os.path.join(psq_dir, file)))
-    with open(bdt_file, 'w+') as f:
+            try:
+                games.append(convert_psq_to_bdt(os.path.join(psq_dir, file)))
+            except:
+                continue
+
+    with open(bdt_file, 'a') as f:
         for game in games:
             f.write(game)
 

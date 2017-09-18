@@ -198,18 +198,16 @@ class ValuePolicyAgent(interfaces.IAgent):
         policy_actions = [a for a in
                           self.merge_actions(policy.suggest(environment.get_state(), self.side, select_count),
                                              policy.suggest(environment.reverse().get_state(), self.side, select_count))
-                          if
-                          self.contain_action(neighbor_actions, a) and
-                          not self.contain_action(direct_neighbor_actions, a)]
+                          if self.contain_action(neighbor_actions, a)]
 
         random_count = self.search_width - len(direct_neighbor_actions)
         if len(policy_actions) >= random_count:
             random_actions = policy_actions[:random_count]
-            return random_actions, direct_neighbor_actions + random_actions
+            return random_actions, random_actions + [a for a in direct_neighbor_actions if not self.contain_action(random_actions, a)]
 
         else:
-            random_count -= len(policy_actions)
-            chosen_actions = direct_neighbor_actions + policy_actions
+            chosen_actions = policy_actions + [a for a in direct_neighbor_actions if not self.contain_action(policy_actions, a)]
+            random_count = self.search_width - len(chosen_actions)
             random_actions = np.ndarray.tolist(np.random.choice([a for a in neighbor_actions
                                                                  if not self.contain_action(chosen_actions, a)],
                                                                 random_count))
@@ -239,15 +237,15 @@ class ValuePolicyAgent(interfaces.IAgent):
             _, candidate_actions = self.get_candidate_actions(environment, policy, last_action)
 
             proposed_action = self.qnet.suggest(environment, candidate_actions, 1)[0]
-            if self.logger.level == logging.DEBUG:
-                action_string = ['(%d, %d)' % (a.x, a.y) for a in candidate_actions]
-                self.logger.debug(" suggestion candidates: %s", ','.join(action_string))
+            # if self.logger.level == logging.DEBUG:
+            #     action_string = ['(%d, %d)' % (a.x, a.y) for a in candidate_actions]
+            #     self.logger.debug(" suggestion candidates: %s", ','.join(action_string))
 
-                self.logger.debug(
-                    " suggestion with environment last action (%d, %d) side %d last action (%d, %d) side %d proposed action (%d, %d)",
-                    environment.last_action.x, environment.last_action.y, environment.last_action.val,
-                    last_action.x, last_action.y, last_action.val,
-                    proposed_action.x, proposed_action.y)
+            self.logger.debug(
+                " suggestion with environment last action (%d, %d) side %d last action (%d, %d) side %d proposed action (%d, %d)",
+                environment.last_action.x, environment.last_action.y, environment.last_action.val,
+                last_action.x, last_action.y, last_action.val,
+                proposed_action.x, proposed_action.y)
             return proposed_action
 
         history1 = []
@@ -341,26 +339,29 @@ class ValuePolicyAgent(interfaces.IAgent):
             instance = rs[max_index]
             return instance[0][0][1]
 
-    def learn_value_net_from_sessions(self, sessions):
+    def build_value_net_data(self, sessions):
+        data= []
         for session in sessions:
             history, opponent_history, final_state = session
             if final_state == 1:
-                self.value_net_training_data.append(history)
+                data.append(history)
             elif final_state == -1:
-                self.value_net_training_data.append(opponent_history)
+                data.append(opponent_history)
+        return data
 
+    def learn_value_net_from_sessions(self, train_sessions):
+        train_data = self.build_value_net_data(train_sessions)
+        self.value_net_training_data += train_data
         if len(self.value_net_training_data) >= self.value_net_training_size:
             error = self.qnet.train(self.value_net_learning_rate, self.value_net_training_data)
-            if error > 0 and self.value_net_learning_rate > self.minimum_learning_rate:
-                self.value_net_learning_rate *= self.learning_rate_dacade_rate
-                self.qnet_error = error
-            self.value_net_training_data = []
-            return True
-        else:
-            return False
+            # if error > 0 and self.value_net_learning_rate > self.minimum_learning_rate:
+            #     self.value_net_learning_rate *= self.learning_rate_dacade_rate
+            #     self.qnet_error = error
 
-    def learn_policy_net_from_sessions(self, sessions, learn_from_winner=False):
-        for session in sessions:
+            self.value_net_training_data = []
+
+    def learn_policy_net_from_sessions(self, train_sessions, learn_from_winner=False):
+        for session in train_sessions:
             history, opponent_history, final_state = session
             if final_state == 1:
                 winning_state, winning_action, _ = history[-2]
@@ -391,7 +392,37 @@ class ValuePolicyAgent(interfaces.IAgent):
         else:
             return False
 
-    def learn_from_sessions(self, sessions, learn_from_winner=False):
+    def learn_from_sessions(self, train_sessions, learn_from_winner=False):
         self.logger.info("Learning from sessions...")
-        self.learn_value_net_from_sessions(sessions)
-        # self.learn_policy_net_from_sessions(sessions, learn_from_winner)
+        self.learn_value_net_from_sessions(train_sessions)
+        self.learn_policy_net_from_sessions(train_sessions, learn_from_winner)
+
+    def validate_from_sessions(self, validate_sessions):
+        print('validate result for value net:', self.qnet.validate(self.build_value_net_data(validate_sessions)))
+        print('validate result for policy net:', self.policy.validate(self.build_policy_net_data(validate_sessions, True)))
+
+    def build_policy_net_data(self, sessions, learn_from_winner):
+        data = []
+        for session in sessions:
+            history, opponent_history, final_state = session
+            if final_state == 1:
+                winning_state, winning_action, _ = history[-2]
+                if learn_from_winner:
+                    for s, a, r in history[:-1]:
+                        data.append([s, a])
+                else:
+                    data.append([winning_state, winning_action])
+                if len(opponent_history) > 1:
+                    failing_state, failing_action, _ = opponent_history[-2]
+                    data.append([failing_state, winning_action])
+            elif final_state == -1:
+                winning_state, winning_action, _ = opponent_history[-2]
+                if learn_from_winner:
+                    for s, a, r in opponent_history[:-1]:
+                        data.append([s, a])
+                else:
+                    data.append([winning_state, winning_action])
+                failing_state, failing_action, _ = history[-2]
+                data.append([failing_state, winning_action])
+        return data
+

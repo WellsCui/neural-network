@@ -24,11 +24,12 @@ class WuziqiValueNet(object):
         self.kernel_size2 = [3, 3]
         self.kernel_size3 = [3, 3]
         self.pool_size = [2, 2]
-        self.training_epics = 50
+        self.training_epics = 10
         self.minimum_training_size = 200
-        self.maximum_training_size = 10000
+        self.maximum_training_size = 500000
         self.cached_training_data = None
         self.training_data_dir = 'data'
+        self.model_path = 'model'
         self.logger = logging.root
 
         input_layer = tf.reshape(
@@ -166,6 +167,12 @@ class WuziqiValueNet(object):
 
         results = self.batch_evaluate(np.array(states))
 
+        if self.logger.level == logging.DEBUG:
+            action_string = ['(%d, %d): %f %f' %
+                             (candidate_actions[i].x, candidate_actions[i].y, results[i], results[candidate_count+i])
+                             for i in range(candidate_count)]
+            self.logger.debug(" suggestion candidates: %s", ','.join(action_string))
+
         chosen = []
         for i in range(suggest_count):
             max_index = np.unravel_index(np.argmax(results), results.shape)
@@ -211,7 +218,16 @@ class WuziqiValueNet(object):
         inputs, y = train_data
         return self.train_with_raw_data(inputs, y, learning_rate)
 
-    def train_with_raw_data(self, inputs, y, learning_rate, log_epic=50):
+    def validate(self, data):
+        validate_data = self.build_td_training_data(data)
+        inputs, y = validate_data
+        loss = self.sess.run(self.loss,
+                             {self.inputs: inputs,
+                              self.y: y,
+                              self.mode: learn.ModeKeys.EVAL})
+        return loss
+
+    def train_with_raw_data(self, inputs, y, learning_rate, log_epic=10):
         self.logger.info("Value-Net learning rate: %f train_size: %d", learning_rate, inputs.shape[0])
 
         def eval_epic(epic, loss):
@@ -228,6 +244,7 @@ class WuziqiValueNet(object):
                                            self.mode: learn.ModeKeys.TRAIN})
             if (i + 1) % log_epic == 0 or i == 0:
                 eval_epic(i, loss)
+            self.save(self.model_path)
 
         # self.recall_training_data(state_actions, y, pred)
 

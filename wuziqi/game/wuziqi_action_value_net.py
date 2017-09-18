@@ -29,6 +29,7 @@ class WuziqiActionValueNet(interfaces.IActionEvaluator):
         self.maximum_training_size = 2000
         self.cached_training_data = None
         self.training_data_dir = 'data'
+        self.model_path = 'model'
         self.logger = logging.root
 
         input_layer = tf.reshape(
@@ -259,6 +260,7 @@ class WuziqiActionValueNet(interfaces.IActionEvaluator):
                                      self.mode: learn.ModeKeys.TRAIN})
             if (i + 1) % log_epic == 0 or i == 0:
                 eval_epic(i, loss)
+            self.save(self.model_path)
 
         # self.recall_training_data(state_actions, y, pred)
 

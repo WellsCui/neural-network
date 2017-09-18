@@ -35,30 +35,33 @@ def build_session(moves):
     return player1_state_actions, player2_state_actions, game.eval_state()
 
 
-def get_sessions(bdt_file):
+def get_sessions(bdt_file, max_session=None):
     with open(bdt_file) as f:
         lines = f.readlines()
     # sessions = []
     i = 0
     for game in lines:
         # print("game script:", game)
-        if (i > 300):
+        if (max_session is not None) and i > max_session:
             break
+        try:
+            matches = re.search('\[(?P<player1>\S+),(?P<player2>\S+),(?P<winner>[+-=]),(?P<moves>\w+),', game)
+            # print("Player1: %s, Player2: %s, Winner: %s" % (matches.group('player1'),
+            #                                                 matches.group('player2'),
+            #                                                 matches.group('winner')))
+            moves = matches.group('moves')
 
-        matches = re.search('\[(?P<player1>\S+),(?P<player2>\S+),(?P<winner>[+-=]),(?P<moves>\w+),', game)
-        # print("Player1: %s, Player2: %s, Winner: %s" % (matches.group('player1'),
-        #                                                 matches.group('player2'),
-        #                                                 matches.group('winner')))
-        moves = matches.group('moves')
+            if moves.startswith('1001300320024005600650041'):
+                continue
 
-        if moves.startswith('1001300320024005600650041'):
+
+            # if i % 10 == 0:
+            #     input('Press enter to continue:')
+
+            yield build_session(moves)
+            i += 1
+        except:
             continue
-        i += 1
-
-        # if i % 10 == 0:
-        #     input('Press enter to continue:')
-
-        yield build_session(moves)
 
 
 def replay_game(moves):

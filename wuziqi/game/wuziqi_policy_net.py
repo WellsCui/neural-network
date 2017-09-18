@@ -24,11 +24,12 @@ class WuziqiPolicyNet(interfaces.IPolicy):
         self.kernel_size2 = [3, 3]
         self.kernel_size3 = [3, 3]
         self.pool_size = [2, 2]
-        self.training_epics = 50
+        self.training_epics = 10
         self.cached_training_data = None
         self.minimum_training_size = 200
-        self.maximum_training_size = 10000
+        self.maximum_training_size = 500000
         self.training_data_dir = 'data'
+        self.model_path = 'model'
         self.logger = logging.root
 
         input_layer = tf.reshape(
@@ -225,7 +226,27 @@ class WuziqiPolicyNet(interfaces.IPolicy):
 
         return self.train_with_raw_data(states, y)
 
-    def train_with_raw_data(self, states, y, log_epic=50, model_dir=None):
+    def validate(self, data):
+        states = np.array([s for s, _ in data])
+        state_shape = np.shape(states)
+        y = np.zeros((state_shape[0], self.board_size[0], self.board_size[1]), dtype=np.int)
+
+        for i in range(state_shape[0]):
+            action = data[i][1]
+            y[i, action.y, action.x] = 1
+
+        y = y.reshape((state_shape[0], self.board_size[0]*self.board_size[1]))
+
+        accuracy, top_5_accuracy, top_10_accuracy = self.sess.run([self.accuracy,
+                                                                   self.top_5_accuracy,
+                                                                   self.top_10_accuracy],
+                                                                  {self.state: states,
+                                                                   self.y: y,
+                                                                   self.mode: learn.ModeKeys.EVAL})
+
+        return accuracy, top_5_accuracy, top_10_accuracy
+
+    def train_with_raw_data(self, states, y, log_epic=10):
         self.logger.debug("Policy-Net learning rate: %f training size %s", self.learning_rate, y.shape)
 
         accuracy, top_5_accuracy, top_10_accuracy = [0, 0, 0]
@@ -241,6 +262,7 @@ class WuziqiPolicyNet(interfaces.IPolicy):
             if (i + 1) % log_epic == 0 or i == 0:
                 self.logger.debug("epic %d policy accuracy: %f top_5_accuracy: %f , top_10_accuracy: %f",
                                   i, accuracy, top_5_accuracy, top_10_accuracy)
+            self.save(self.model_path)
             # if model_dir is not None:
             #     print("Saving policy model...")
             #     self.save(model_dir)
@@ -279,6 +301,6 @@ class WuziqiPolicyNet(interfaces.IPolicy):
             record_count = y.shape[0]
             print("Training policy net with %d records..." % record_count)
             self.merge_with_cached_training_data([inputs, y])
-            return self.train_with_raw_data(inputs, y, 5, model_dir)
+            return self.train_with_raw_data(inputs, y, 5)
         else:
             return None
