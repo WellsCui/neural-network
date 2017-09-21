@@ -92,7 +92,7 @@ def replay_games(bdt_file):
         moves = matches.group('moves')
 
         result[i] = replay_game(moves)
-        if i % 50 == 0:
+        if i % 2 == 0:
             input('Press any key to continue:')
         i += 1
     print("Win: %d, Loss: %d, Unfinished: %d" %

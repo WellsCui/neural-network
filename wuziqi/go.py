@@ -13,7 +13,8 @@ import game.human_agent as human_agent
 import game.interfaces as interfaces
 import training.bdt_game
 import training.psq_game
-
+import tables
+import game.utils
 import re
 
 
@@ -369,20 +370,23 @@ def ai2_vs_human(base_path, load_from_model=True, online_learning=True, train_wi
     run_with_agents(10, player1, human_player, model_path, model_path, online_learning, True)
 
 
-def train_with_games(training_data_dir, model_dir, games_file, is_value_policy_agent=False):
+def train_with_games(base_dir, games_file, is_value_policy_agent=False, load_from_model=True,
+                     prompt=False):
+    training_data_dir = base_dir + '/data'
+    model_dir = base_dir + '/model'
     board_size = (15, 15)
     if is_value_policy_agent:
         player1 = value_policy_agent.ValuePolicyAgent("player1", board_size, 0.0005, 1, 0.99)
     else:
         player1 = competing_agent.CompetingAgent("player1", board_size, 0.0005, 1, 0.99)
+    if load_from_model and os.path.isfile(os.path.join(model_dir + '/checkpoint')):
+        print("Loading player1 model...")
+        player1.load_model(model_dir)
     player1.qnet.training_data_dir = training_data_dir
     player1.policy.training_data_dir = training_data_dir
     player1.qnet.model_path = model_dir
     player1.policy.model_path = model_dir
-    epics = 1000
-    player1.qnet.training_epics = epics
-    player1.policy.training_epics = epics
-    train_agent_with_games(player1, training.bdt_game.get_sessions(games_file), model_dir)
+    train_agent_with_games(player1, training.bdt_game.get_sessions(games_file), prompt)
 
 
 def train_with_raw_data(training_data_dir, model_dir):
@@ -395,18 +399,25 @@ def train_with_raw_data(training_data_dir, model_dir):
     player1.save_model(model_dir)
 
 
-def train_agent_with_games(agent, sessions, save_dir):
+def train_agent_with_games(agent, sessions, prompt=False):
     finished_sessions = list(s for s in sessions if s[2] != 0)
     session_count = len(finished_sessions)
     training_num = int(session_count*0.8)
     train_sessions = np.array(finished_sessions[0:training_num])
-    batch_size = int(training_num * 0.5)
-    for i in range(1):
-        # agent.learn_from_sessions(train_sessions[np.random.choice(range(training_num), batch_size)], True)
-        agent.learn_from_sessions(train_sessions, True)
+    batch_size = int(training_num * 0.1)
+    for i in range(100):
+        if prompt:
+            learning_rate, epics = eval(input('Enter (learning_rate, epics):'))
+        else:
+            learning_rate, epics = 1, 100
+        agent.qnet.training_epics = epics
+        agent.policy.training_epics = epics
+        agent.learn_from_sessions(train_sessions[np.random.choice(range(training_num), batch_size)], learning_rate,
+                                  True)
+        # agent.learn_from_sessions(train_sessions, True)
         agent.validate_from_sessions(finished_sessions[training_num:])
-        print("Saving model...")
-        agent.save_model(save_dir)
+        # print("Saving model...")
+        # agent.save_model(save_dir)
 
 
 def human_vs_human():
@@ -420,6 +431,9 @@ def human_vs_human():
 def import_games():
     years = range(2009, 2017, 1)
     for y in years:
+        game_folder = '/Users/wei.cui/Downloads/gomocup%dresults/standard' % y
+        print('importing games from ', game_folder)
+        training.psq_game.convert_psq_files(game_folder, 'data/games.bdt')
         for i in range(1, 4, 1):
             game_folder = '/Users/wei.cui/Downloads/gomocup%dresults/freestyle%d' % (y, i)
             print('importing games from ', game_folder)
@@ -427,23 +441,22 @@ def import_games():
 
 
 set_logging(logging.DEBUG)
-# human_vs_human()
+human_vs_human()
 # import_games()
-# training.bdt_game.replay_games('data/gomocup-2017.bdt')
+# training.bdt_game.replay_games('data/games.bdt')
 # training.psq_game.convert_psq_files('../history/standard', 'data/gomocup-2016.bdt')
 # training.psq_game.convert_psq_files('/Users/wei.cui/Downloads/gomocup2009results/Standard', 'data/games.bdt')
 # train_with_games("/output/data", "/output/model")
 # train_with_raw_data("data", "/output/model")
 # train_with_raw_data("data", "../history/gomocup-2016-5/model")
 # train_with_games("../history/gomocup-2016/data", "../history/gomocup-2016/model")
-# training.bdt_game.replay_sessions()
-# replay_games()
 # ai_vs_human("../history/gomocup-2016-7", True, True, False)
 
-train_with_games("../history/value-policy-ai-1/data", "../history/value-policy-ai-1/model", 'data/games.bdt', True)
-# train_with_games("/output/data", "/output/model", 'data/games.bdt', True)
-# ai2_vs_human("../history/value-policy-ai-1", True, False, False)
-# ai_vs_human("../history/ai_vs_human", True)
+# train_with_games("../history/value-policy-ai-1", 'data/games.bdt', True, True)
+# train_with_games("value-net-agent", 'data/games.bdt', True, True)
+# train_with_games("/output", 'data/games.bdt', True)
+ai2_vs_human("../history/gcloud-models/value-net-agent", True, False, False)
+# ai_vs_human("../history/gomocup-2016-6", True, False, False)
 # ai_vs_ai("../history/ai_vs_ai", True)
 
 # train_evaluator(1000, 100)

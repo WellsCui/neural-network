@@ -59,7 +59,7 @@ def convert_psq_to_bdt(psq_file):
     date = '2017,1'
     winning = '+'
     moves = []
-    hex_str='0123456789ABCDEF'
+    hex_str='0123456789ABCDE'
     # 1997,382=[marik,om-by,-,88FFFE98798A6A975B4C59999A7BA86C5D5C3C7A4B896BA7B6A99687,?,?]
 
     for move in lines[1:-3]:
@@ -70,6 +70,8 @@ def convert_psq_to_bdt(psq_file):
 
 def convert_psq_files(psq_dir, bdt_file):
     games = []
+    if not os.path.isdir(psq_dir):
+        return
     for file in os.listdir(psq_dir):
         if file.endswith(".psq"):
             try:
