@@ -66,7 +66,7 @@ class ValuePolicyAgent(interfaces.IAgent):
             self.qnet.evaluate(state, action),
             action == best_action)
         if self.online_learning:
-            self.learn_from_sessions(rehearsals)
+            self.learn_from_sessions(rehearsals, self.value_net_learning_rate)
         self.last_action = action
         environment.update(self.last_action)
         return self.last_action
@@ -314,7 +314,7 @@ class ValuePolicyAgent(interfaces.IAgent):
             return [[state * -1, action.reverse(), reward] for state, action, reward in h]
         history, opponent_history, final_result = experience
         session = history, reverse_history(opponent_history), final_result
-        return self.learn_from_sessions([session], learn_from_winner)
+        return self.learn_from_sessions([session], self.value_net_learning_rate, learn_from_winner)
 
     def train_model_with_raw_data(self, train_dir, model_dir, epics):
         self.logger.info('training model with raw data...')
@@ -349,11 +349,11 @@ class ValuePolicyAgent(interfaces.IAgent):
                 data.append(opponent_history)
         return data
 
-    def learn_value_net_from_sessions(self, train_sessions):
+    def learn_value_net_from_sessions(self, train_sessions, learning_rate):
         train_data = self.build_value_net_data(train_sessions)
         self.value_net_training_data += train_data
         if len(self.value_net_training_data) >= self.value_net_training_size:
-            error = self.qnet.train(self.value_net_learning_rate, self.value_net_training_data)
+            error = self.qnet.train(learning_rate, self.value_net_training_data)
             # if error > 0 and self.value_net_learning_rate > self.minimum_learning_rate:
             #     self.value_net_learning_rate *= self.learning_rate_dacade_rate
             #     self.qnet_error = error
@@ -392,9 +392,9 @@ class ValuePolicyAgent(interfaces.IAgent):
         else:
             return False
 
-    def learn_from_sessions(self, train_sessions, learn_from_winner=False):
+    def learn_from_sessions(self, train_sessions, learning_rate, learn_from_winner=False):
         self.logger.info("Learning from sessions...")
-        self.learn_value_net_from_sessions(train_sessions)
+        self.learn_value_net_from_sessions(train_sessions, learning_rate)
         self.learn_policy_net_from_sessions(train_sessions, learn_from_winner)
 
     def validate_from_sessions(self, validate_sessions):

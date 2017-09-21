@@ -117,7 +117,7 @@ class WuziqiValueNet(object):
         pool_flat = tf.reshape(pool6, [-1, flat_size], name=name + "value_net_pool_flat")
         dropout = tf.layers.dropout(
             name=name + "value_net_dropout",
-            inputs=pool_flat, rate=0.8, training=self.mode == learn.ModeKeys.TRAIN)
+            inputs=pool_flat, rate=0.4, training=self.mode == learn.ModeKeys.TRAIN)
         dense = tf.layers.dense(
             inputs=dropout, units=2048, activation=tf.nn.relu, name=name + "value_net_dense")
 
@@ -207,19 +207,20 @@ class WuziqiValueNet(object):
         self.cached_training_data = [state_actions[index], y[index]]
 
     def train(self, learning_rate, data):
-        new_training_data = self.build_td_training_data(data)
-        if new_training_data[1].shape[0] > 0:
-            self.save_training_data(new_training_data)
-        train_data = self.merge_with_cached_training_data(new_training_data)
+        new_training_data = self.build_td_training_data2(data, learning_rate)
+        # if new_training_data[1].shape[0] > 0:
+        #     self.save_training_data(new_training_data)
+        # train_data = self.merge_with_cached_training_data(new_training_data)
+        train_data = new_training_data
 
-        if train_data is None or train_data[1].shape[0] < self.minimum_training_size:
-            return 0
+        # if train_data is None or train_data[1].shape[0] < self.minimum_training_size:
+        #     return 0
 
         inputs, y = train_data
         return self.train_with_raw_data(inputs, y, learning_rate)
 
     def validate(self, data):
-        validate_data = self.build_td_training_data(data)
+        validate_data = self.build_td_training_data2(data, 1)
         inputs, y = validate_data
         loss = self.sess.run(self.loss,
                              {self.inputs: inputs,
@@ -232,6 +233,8 @@ class WuziqiValueNet(object):
 
         def eval_epic(epic, loss):
             self.logger.info("epic %d: %f ", epic, loss)
+            # idx = np.random.choice(range(y.shape[0]), 20)
+
             vals = self.sess.run(self.pred, {self.inputs: inputs[0:20],
                                              self.mode: learn.ModeKeys.EVAL})
             result = np.append(vals, np.reshape(y[0:20], vals.shape), axis=1)
@@ -303,6 +306,34 @@ class WuziqiValueNet(object):
                 elif session_y[index] - self.lbd > self.lbd * margin and end_value < 1:
                     inputs.append(state)
                     y.append([end_value])
+                end_value = self.lbd * end_value
+
+        return np.array(inputs), np.array(y)
+
+    def build_td_training_data2(self, sessions, learning_rate):
+        inputs = []
+        y = []
+        margin = (1 - self.lbd) / 2
+        for session in sessions:
+            steps = len(session)
+            if steps < 2:
+                continue
+            end_state, end_action, end_reward = session[-1]
+            end_value = 1
+            if end_action.val != 0:
+                continue
+
+            session_inputs = np.array([state for state, _, _ in session])
+            session_y = self.sess.run(self.pred, {self.inputs: session_inputs,
+                                                  self.mode: learn.ModeKeys.EVAL})
+
+            for index in range(steps - 1, -1, -1):
+                state, action, reward = session[index]
+                pred = session_y[index]
+                difference = end_value - pred
+                if difference > margin or difference < -margin:
+                    inputs.append(state)
+                    y.append([pred + difference * learning_rate])
                 end_value = self.lbd * end_value
 
         return np.array(inputs), np.array(y)

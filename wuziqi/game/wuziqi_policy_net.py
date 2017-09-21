@@ -118,7 +118,7 @@ class WuziqiPolicyNet(interfaces.IPolicy):
         dropout = tf.layers.dropout(
             name=name+"policy_dropout",
             inputs=pool_flat,
-            rate=0.8,
+            rate=0.4,
             training=self.mode == learn.ModeKeys.TRAIN)
         dense = tf.layers.dense(
             name=name+"policy_dense",
@@ -137,7 +137,7 @@ class WuziqiPolicyNet(interfaces.IPolicy):
                 labels=self.y, logits=self.scores),
             name=name+"policy_loss")
 
-        y_index = tf.argmax(self.y, 1, name=name+"policy_y_index" )
+        y_index = tf.argmax(self.y, 1, name=name+"policy_y_index")
 
         correct_predictions = tf.equal(self.predictions, y_index, name=name+"correct_predictions")
         self.accuracy = tf.reduce_mean(tf.cast(correct_predictions, "float"), name=name+"accuracy")
@@ -216,13 +216,13 @@ class WuziqiPolicyNet(interfaces.IPolicy):
 
         y = y.reshape((state_shape[0], self.board_size[0]*self.board_size[1]))
 
-        self.save_training_data([states, y])
+        # self.save_training_data([states, y])
 
-        states, y = self.merge_with_cached_training_data([states, y])
-        self.logger.debug("size of policy net cached training data: %d", y.shape[0])
+        # states, y = self.merge_with_cached_training_data([states, y])
+        # self.logger.debug("size of policy net cached training data: %d", y.shape[0])
 
-        if y.shape[0] < self.minimum_training_size:
-            return [0, 0, 0]
+        # if y.shape[0] < self.minimum_training_size:
+        #     return [0, 0, 0]
 
         return self.train_with_raw_data(states, y)
 
