@@ -57,9 +57,15 @@ class WuziqiPolicyNet(interfaces.IPolicy):
             pool_size=self.pool_size,
             strides=1)
 
+        dropout2 = tf.layers.dropout(
+            name=name+"policy_dropout2",
+            inputs=pool2,
+            rate=0.2,
+            training=self.mode == learn.ModeKeys.TRAIN)
+
         conv3 = tf.layers.conv2d(
             name=name + "policy_conv3",
-            inputs=pool2,
+            inputs=dropout2,
             filters=128,
             kernel_size=self.kernel_size2,
             # padding="same",
@@ -79,9 +85,15 @@ class WuziqiPolicyNet(interfaces.IPolicy):
             pool_size=self.pool_size,
             strides=1)
 
+        dropout4 = tf.layers.dropout(
+            name=name+"policy_dropout4",
+            inputs=pool4,
+            rate=0.2,
+            training=self.mode == learn.ModeKeys.TRAIN)
+
         conv5 = tf.layers.conv2d(
             name=name + "policy_conv5",
-            inputs=pool4,
+            inputs=dropout4,
             filters=256,
             kernel_size=self.kernel_size3,
             # padding="same",
@@ -118,7 +130,7 @@ class WuziqiPolicyNet(interfaces.IPolicy):
         dropout = tf.layers.dropout(
             name=name+"policy_dropout",
             inputs=pool_flat,
-            rate=0.4,
+            rate=0.8,
             training=self.mode == learn.ModeKeys.TRAIN)
         dense = tf.layers.dense(
             name=name+"policy_dense",
