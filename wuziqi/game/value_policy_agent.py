@@ -4,7 +4,8 @@ import logging
 import game.interfaces as interfaces
 import game.wuziqi as wuziqi
 import game.utils
-import game.wuziqi_value_net
+import game.deeper_plain_value_net
+import game.value_res_net
 import game.wuziqi_policy_net
 
 
@@ -17,7 +18,7 @@ class ValuePolicyAgent(interfaces.IAgent):
         self.minimum_learning_rate = 0.0004
         self.learning_rate_dacade_rate = 0.6
         self.policy = game.wuziqi_policy_net.WuziqiPolicyNet(name + "_", board_size, initial_learning_rate, lbd)
-        self.qnet = game.wuziqi_value_net.WuziqiValueNet(name + "_", board_size, initial_learning_rate, lbd)
+        self.qnet = game.value_res_net.ValueRestNet(name + "_", board_size, initial_learning_rate, lbd)
         self.policy.training_data_dir = training_data_dir
         self.qnet.training_data_dir = training_data_dir
         self.mode = "online_learning."
@@ -26,7 +27,7 @@ class ValuePolicyAgent(interfaces.IAgent):
         self.search_width = 20
         self.policy_training_data = []
         self.value_net_training_data = []
-        self.value_net_training_size = 20
+        self.value_net_training_size = 5
         self.policy_training_size = 20
         self.epsilon = 0.001
         self.greedy_rate = 0.5
@@ -394,11 +395,11 @@ class ValuePolicyAgent(interfaces.IAgent):
 
     def learn_from_sessions(self, train_sessions, learning_rate, learn_from_winner=False):
         self.logger.info("Learning from sessions...")
-        self.learn_value_net_from_sessions(train_sessions, learning_rate)
+        # self.learn_value_net_from_sessions(train_sessions, learning_rate)
         self.learn_policy_net_from_sessions(train_sessions, learn_from_winner)
 
     def validate_from_sessions(self, validate_sessions):
-        print('validate result for value net:', self.qnet.validate(self.build_value_net_data(validate_sessions)))
+        # print('validate result for value net:', self.qnet.validate(self.build_value_net_data(validate_sessions)))
         print('validate result for policy net:', self.policy.validate(self.build_policy_net_data(validate_sessions, True)))
 
     def build_policy_net_data(self, sessions, learn_from_winner):
