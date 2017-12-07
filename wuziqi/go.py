@@ -404,12 +404,13 @@ def train_agent_with_games(agent, sessions, prompt=False):
     session_count = len(finished_sessions)
     training_num = int(session_count*0.8)
     train_sessions = np.array(finished_sessions[0:training_num])
-    batch_size = int(training_num * 0.1)
+    batch_size = int(session_count*0.2)
     for i in range(100):
+        print("iteration: ", i)
         if prompt:
             learning_rate, epics = eval(input('Enter (learning_rate, epics):'))
         else:
-            learning_rate, epics = 1, 100
+            learning_rate, epics = 1, 50
         agent.qnet.training_epics = epics
         agent.policy.training_epics = epics
         agent.learn_from_sessions(train_sessions[np.random.choice(range(training_num), batch_size)], learning_rate,
@@ -441,7 +442,7 @@ def import_games():
 
 
 set_logging(logging.DEBUG)
-human_vs_human()
+# human_vs_human()
 # import_games()
 # training.bdt_game.replay_games('data/games.bdt')
 # training.psq_game.convert_psq_files('../history/standard', 'data/gomocup-2016.bdt')
@@ -453,6 +454,7 @@ human_vs_human()
 # ai_vs_human("../history/gomocup-2016-7", True, True, False)
 
 # train_with_games("../history/value-policy-ai-1", 'data/games.bdt', True, True)
+# train_with_games("../history/value-policy-ai-4", 'data/games.bdt', True, True)
 # train_with_games("value-net-agent", 'data/games.bdt', True, True)
 # train_with_games("/output", 'data/games.bdt', True)
 ai2_vs_human("../history/gcloud-models/value-net-agent", True, False, False)
