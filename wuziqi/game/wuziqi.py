@@ -24,10 +24,17 @@ class WuziqiGame(game.interfaces.IEnvironment):
     SIDES = [-1, 1]
     WINNING_SIZE = 5
 
-    def __init__(self, board_size):
+    def __init__(self, board_size, state=None, last_action=None):
         self.board_size = board_size
-        self.state = np.zeros(board_size)
-        self.last_action = WuziqiAction(0, 0, 0)
+        if state is None:
+            self.state = np.zeros(board_size)
+        else:
+            self.state = state
+        if last_action is None:
+            self.last_action = WuziqiAction(0, 0, 0)
+        else:
+            self.last_action = last_action
+
 
     def get_state(self):
         return self.state
@@ -116,7 +123,7 @@ class WuziqiGame(game.interfaces.IEnvironment):
 
         # np.apply_along_axis(print_row, 1, printable)
 
-        print(' ', ' '.join([str(col % 10) for col in range(15)]))
+        print('\\', ' '.join([str(col % 10) for col in range(15)]))
         for y in range(self.board_size[1]):
             row = []
             for x in range(self.board_size[0]):
@@ -126,6 +133,8 @@ class WuziqiGame(game.interfaces.IEnvironment):
                         row.append('#')
                     elif self.last_action.val == -1:
                         row.append('H')
+                    else:
+                        row.append('-')
                 elif state == 1:
                     row.append('X')
                 elif state == -1:
@@ -175,3 +184,7 @@ class WuziqiGame(game.interfaces.IEnvironment):
                 else:
                     positions.append(Position(x, y))
         return positions
+
+    @staticmethod
+    def is_same_state(s1, s2):
+        return np.array_equal(s1, s2)
