@@ -58,7 +58,8 @@ class AlphaZeroNet(object):
         self.value_loss = tf.losses.mean_squared_error(self.values, self.value_output)
 
         self.saver = tf.train.Saver()
-        self.losses = layers.l2_regularizer(tf.add(self.policy_loss, self.value_loss))
+        # self.losses = layers.l2_regularizer(tf.add(self.policy_loss, self.value_loss, )).
+        self.losses = self.policy_loss + self.value_loss
 
         self.optimizer = tf.train.AdamOptimizer(learning_rate, name=name + "_Optimizer").minimize(self.losses)
         self.sess = tf.Session()
@@ -90,8 +91,9 @@ class AlphaZeroNet(object):
         return self.batch_evaluate(new_state)
 
     def batch_evaluate(self, states):
-        return self.sess.run([self.policy_output, self.value_output], {self.inputs: states,
+        result = self.sess.run([self.policy_output, self.value_output], {self.inputs: states,
                                          self.mode: learn.ModeKeys.EVAL})
+        return [(result[0][i], result[1][i]) for i in range(len(states))]
 
     def save(self, save_path):
         save_file = save_path

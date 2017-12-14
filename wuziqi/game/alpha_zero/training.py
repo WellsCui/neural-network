@@ -1,4 +1,5 @@
 import game.alpha_zero.alpha_zero_net as azn
+import game.alpha_zero.queued_evaluator as queued_evaluator
 import game.alpha_zero.monte_carlo_tree_search as mcts
 import game.wuziqi as wuziqi
 import numpy as np
@@ -21,7 +22,9 @@ def run():
     board_size = (15, 15)
     init_state = np.zeros(board_size)
     net = azn.AlphaZeroNet('AlphaZeroNet', board_size, 0.0005, 0.99)
-    mts = mcts.McTreeSearch(mcts.McNode(init_state, -1), net, mcts.McTreeSearchOption(10, 1, 0.5))
+    evaluator = queued_evaluator.QueuedEvaluator(net, 10)
+    evaluator.start()
+    mts = mcts.McTreeSearch(mcts.McNode(init_state, -1), net, evaluator, mcts.McTreeSearchOption(10, 1, 0.5))
     self_play(mts)
 
 
