@@ -24,7 +24,7 @@ def run():
     net = azn.AlphaZeroNet('AlphaZeroNet', board_size, 0.0005, 0.99)
     evaluator = queued_evaluator.QueuedEvaluator(net, 10)
     evaluator.start()
-    mts = mcts.McTreeSearch(mcts.McNode(init_state, -1), net, evaluator, mcts.McTreeSearchOption(10, 1, 0.5))
+    mts = mcts.McTreeSearch(mcts.McNode(init_state, -1), net, evaluator, mcts.McTreeSearchOption(300, 1, 0.5))
     self_play(mts)
 
 

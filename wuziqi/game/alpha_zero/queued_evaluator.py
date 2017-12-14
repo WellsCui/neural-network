@@ -4,6 +4,8 @@ import concurrent.futures as futures
 import threading
 import time
 
+import datetime
+
 
 class QueuedEvaluator(object):
     def __init__(self, batch_evaluator, batch_size):
@@ -12,7 +14,7 @@ class QueuedEvaluator(object):
         self.requests = queue.Queue()
         self.process_thread = None
         self._stop_event = None
-        self._idle_sleep = 3
+        self._idle_sleep = 1
 
     def submit_request(self, state, future: futures.Future):
         self.requests.put((state, future))
@@ -22,7 +24,7 @@ class QueuedEvaluator(object):
 
     def fetch_request(self):
         try:
-            return self.requests.get(True, 3)
+            return self.requests.get(True, 1)
         except:
             return None
 
@@ -30,8 +32,6 @@ class QueuedEvaluator(object):
         states = [s for s, _ in batch]
         fs = [f for _, f in batch]
         results = self.batch_evaluator.batch_evaluate(states)
-        # print('batch result shape:', len(results))
-        # print(results[0])
         for i in range(len(fs)):
             fs[i].set_result(results[i])
 
@@ -47,9 +47,9 @@ class QueuedEvaluator(object):
                     request = self.fetch_request()
             if len(batch) > 0:
                 self.evaluate(batch)
-            else:
-                print('No requests in queue, wait %d seconds ...' % self._idle_sleep)
-                time.sleep(self._idle_sleep)
+            # else:
+            #     print('No requests in queue, wait %d seconds ...' % self._idle_sleep)
+            #     time.sleep(self._idle_sleep)
         print('evaluator stopped.')
 
     def start(self):

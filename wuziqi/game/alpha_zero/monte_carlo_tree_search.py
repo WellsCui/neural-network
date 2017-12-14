@@ -16,10 +16,11 @@ class McNode:
         self.expended = False
         self.side = side
         self.visit_count = 0
+        self.mask = np.reshape(state == 0, self.state.shape[0] * self.state.shape[1])
 
 
 class McEdge:
-    def __init__(self, src_node: McNode, action, dst_node: McNode, probability):
+    def __init__(self, src_node: McNode, action: wuziqi.WuziqiAction, dst_node: McNode, probability):
         self.src_node = src_node
         self.action = action
         self.dst_node = dst_node
@@ -46,44 +47,40 @@ class McTreeSearch:
         self.evaluator = evaluator
         self.nodes = [self.root]
         self.options = options
+        self.positions = [a for a in np.ndindex(self.net.board_size)]
+        self.position_count = len(self.positions)
 
     def get_upper_confidence_bound(self, edge: McEdge):
         return self.options.c_put * edge.probability * math.sqrt(edge.src_node.visit_count) * (1 + edge.visit_count)
 
-    def get_dst_node(self, src_node, action):
-        if action is None:
+    def get_dst_node(self, edge: McEdge):
+        if edge.dst_node:
+            return edge.dst_node
+        if edge.action is None:
             return None
-        dst_state = src_node.state.copy()
-        dst_state[action.y, action.x] = action.val
-        dst_node = self.get_node_by_state(dst_state)
-        if dst_node:
-            return dst_node
-        dst_node = McNode(dst_state, action.val)
-        self.nodes.append(dst_node)
-        return dst_node
+        dst_state = edge.src_node.state.copy()
+        dst_state[edge.action.y, edge.action.x] = edge.action.val
+        node = self.get_node_by_state(dst_state)
+        if node:
+            return node
+        node = McNode(dst_state, edge.action.val)
+        self.nodes.append(node)
+        return node
 
     def create_edge(self, src_node, action, probability):
-        return McEdge(src_node, action, self.get_dst_node(src_node, action), probability)
+        return McEdge(src_node, action, None, probability)
+
+    def create_edge_v(self, node, pos, p):
+        action = wuziqi.WuziqiAction(pos[1], pos[0], node.side * -1)
+        return self.create_edge(node, action, p)
 
     def build_edges(self, node, probabilities):
-        mask = np.reshape(node.state == 0, self.net.board_size[0] * self.net.board_size[1])
-        action_probabilities = probabilities * mask
-        positions = [a for a in np.ndindex(self.net.board_size)]
-
-        def create_edge_v(pos, p):
-            action = wuziqi.WuziqiAction(pos[1], pos[0], node.side * -1)
-            return self.create_edge(node, action, p)
-
-        # create_edge_v_func = np.vectorize(create_edge_v)
-        # edges = create_edge_v_func(actions, action_probabilities)
-
         edges = []
-
-        for i in range(len(positions)):
-            if not mask[i]:
+        for i in range(self.position_count):
+            if not node.mask[i]:
                 continue
             else:
-                edges.append(create_edge_v(positions[i], action_probabilities[i]))
+                edges.append(self.create_edge_v(node, self.positions[i], probabilities[i]))
         return edges
 
     def expand_node(self, node: McNode):
@@ -91,9 +88,7 @@ class McTreeSearch:
             return node
         ft = futures.Future()
         self.evaluator.submit_request(node.state, ft)
-        # p, v = self.net.evaluate(node.state)
         p, v = ft.result()
-        # print(p, v)
         node.value = v[0]
         if not wuziqi.WuziqiGame(self.net.board_size, node.state).is_ended():
             node.edges = self.build_edges(node, p)
@@ -108,7 +103,7 @@ class McTreeSearch:
 
 
     def back_up(self, steps, val):
-        print('backup steps:', len(steps))
+
         for step in reversed(steps):
             step.src_node.visit_count += 1
             step.visit_count += 1
@@ -130,20 +125,15 @@ class McTreeSearch:
         return rs[1]
 
     def simulate(self, simulate_index):
-        print('simulating index:', simulate_index)
         current = self.root
         steps = []
-        # print('current.expended:', current.expended)
         while current is not None and current.expended:
             step = self.select_edge(current)
-            # print('step:', step.action)
             if step is None:
                 break
-
             steps.append(step)
-            current = step.dst_node
+            current = self.get_dst_node(step)
         if current is not None and not current.expended:
-            # print('expanding node:', current)
             self.expand_node(current)
         self.back_up(steps, current.value)
 
@@ -153,7 +143,8 @@ class McTreeSearch:
         return p / p_sum
 
     def execute_edge(self, edge: McEdge):
-        self.root = edge.dst_node
+        self.root = self.get_dst_node(edge)
+        self.nodes = self.get_nodes(self.root)
 
     def build_node_probabilities(self, node, statistics):
         p = np.zeros(self.net.board_size)
@@ -163,13 +154,8 @@ class McTreeSearch:
 
     def run_simulations(self):
         begin = datetime.datetime.now()
-        threads = []
-
         print('running simulations...')
-
-        # We can use a with statement to ensure threads are cleaned up promptly
         with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
-            # Start the load operations and mark each future with its URL
             futures = {executor.submit(self.simulate, simulate_index): simulate_index
                        for simulate_index in range(self.options.simulations)}
             for future in concurrent.futures.as_completed(futures):
@@ -182,7 +168,7 @@ class McTreeSearch:
                 #     print('simulate %s return: %s' % (simulate_index, data))
 
         end = datetime.datetime.now()
-        print('simpulations completed in %d seconds:' % (end-begin).seconds)
+        print('simulations completed in %d seconds:' % (end-begin).seconds)
 
     def play(self):
         self.run_simulations()
@@ -191,8 +177,6 @@ class McTreeSearch:
         statistics = self.build_node_probabilities(edge.src_node, statistics).reshape(self.net.board_size)
         print('selected action: (%d, %d) side: %d, action_value: %f' % (edge.action.x, edge.action.y, edge.action.val, edge.action_value))
         print('src_node.visit_count: %d, src_node.value: %f' % (edge.src_node.visit_count, edge.src_node.value))
-        # print('statistics:')
-        # print(statistics)
         self.execute_edge(edge)
         wuziqi.WuziqiGame(self.net.board_size, self.root.state, edge.action).show()
         return edge.src_node.state, statistics
@@ -202,3 +186,10 @@ class McTreeSearch:
             if wuziqi.WuziqiGame.is_same_state(node.state, state):
                 return node
         return None
+
+    def get_nodes(self, node: McNode):
+        result = [node]
+        for edge in node.edges:
+            if edge.dst_node:
+                result += self.get_nodes(edge.dst_node)
+        return result
