@@ -38,6 +38,8 @@ class McTreeSearchOption:
         self.c_put = c_put
         self.evalue_batch_size = 8
         self.max_simulations = 50
+        self.score_lambda = 0.99
+        self.thether = 0.25
 
 
 class McTreeSearch:
@@ -86,9 +88,19 @@ class McTreeSearch:
     def expand_node(self, node: McNode):
         if node.expended:
             return node
-        ft = futures.Future()
-        self.evaluator.submit_request(node.state, ft)
-        p, v = ft.result()
+        ft1 = futures.Future()
+        self.evaluator.submit_request(node.state, ft1)
+        rotation = np.random.choice(4, 1)[0]
+
+        ft2 = futures.Future()
+        self.evaluator.submit_request(np.rot90(node.state, rotation), ft2)
+
+        p, v = ft1.result()
+        p_, v_ = ft2.result()
+        p_ = np.rot90(p_.reshape(self.net.board_size), rotation).reshape(self.net.board_size[0]*self.net.board_size[1])
+
+        p = p * (1 - self.options.thether) + p_ * self.options.thether
+
         node.value = v[0]
         if not wuziqi.WuziqiGame(self.net.board_size, node.state).is_ended():
             node.edges = self.build_edges(node, p)
@@ -100,7 +112,6 @@ class McTreeSearch:
         for edge in node.edges:
             edge.upper_confidence_bound = self.options.c_put * edge.probability * \
                                           node_visit_count_sqrt * (1 + edge.visit_count)
-
 
     def back_up(self, steps, val):
 
@@ -142,8 +153,8 @@ class McTreeSearch:
         p_sum = np.sum(p)
         return p / p_sum
 
-    def execute_edge(self, edge: McEdge):
-        self.root = self.get_dst_node(edge)
+    def set_root(self, node: McNode):
+        self.root = node
         self.nodes = self.get_nodes(self.root)
 
     def build_node_probabilities(self, node, statistics):
@@ -170,16 +181,40 @@ class McTreeSearch:
         end = datetime.datetime.now()
         print('simulations completed in %d seconds:' % (end-begin).seconds)
 
-    def play(self):
+    def move(self):
         self.run_simulations()
         statistics = self.collect_node_statistics(self.root)
         edge = self.root.edges[np.argmax(statistics)]
-        statistics = self.build_node_probabilities(edge.src_node, statistics).reshape(self.net.board_size)
-        print('selected action: (%d, %d) side: %d, action_value: %f' % (edge.action.x, edge.action.y, edge.action.val, edge.action_value))
+        probabilities = self.build_node_probabilities(edge.src_node, statistics)
+        print('selected action: (%d, %d) side: %d, visit_count: %d, action_value: %f' %
+              (edge.action.x, edge.action.y, edge.action.val, edge.visit_count,  edge.action_value))
         print('src_node.visit_count: %d, src_node.value: %f' % (edge.src_node.visit_count, edge.src_node.value))
-        self.execute_edge(edge)
+        self.set_root(self.get_dst_node(edge))
         wuziqi.WuziqiGame(self.net.board_size, self.root.state, edge.action).show()
-        return edge.src_node.state, statistics
+        return edge.src_node.state, probabilities
+
+    def self_play(self):
+        steps = []
+        c = 0
+        while not wuziqi.WuziqiGame(self.net.board_size, self.root.state).is_ended():
+            if c > 10 and self.options.temperature == 1:
+                self.options.temperature = 1e-8
+            state, p = self.move()
+            steps.append((state, p))
+            c += 1
+            print('step:', c)
+
+        return self.score_steps(steps)
+
+    def score_steps(self, steps):
+        val = wuziqi.WuziqiGame(self.net.board_size, self.root.state).eval_state()
+        rs = []
+        steps.reverse()
+        for s, p in steps:
+            rs.append((s, p, val))
+            val *= self.options.score_lambda
+        rs.reverse()
+        return rs
 
     def get_node_by_state(self, state):
         for node in self.nodes:

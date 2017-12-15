@@ -99,10 +99,13 @@ class AlphaZeroNet(object):
         save_file = save_path
         if not os.path.exists(save_path):
             os.makedirs(save_path)
+        print('saving model...')
         return self.saver.save(self.sess, save_file)
 
     def restore(self, save_path):
-        return self.saver.restore(self.sess, save_path)
+        if os.path.exists(save_path):
+            print('restoring model...')
+            return self.saver.restore(self.sess, save_path)
 
     def train(self, train_data, epics=100):
         inputs, probabilities, values = train_data
@@ -113,5 +116,6 @@ class AlphaZeroNet(object):
                                            self.probabilities: probabilities,
                                            self.values: values,
                                            self.mode: learn.ModeKeys.TRAIN})
+            print('epics: %d policy_loss: %f, value_loss: %f, losses %f' % (i, policy_loss, value_loss, losses))
 
         return policy_loss, value_loss

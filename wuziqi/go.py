@@ -11,6 +11,7 @@ import game.competing_agent as competing_agent
 import game.value_policy_agent as value_policy_agent
 import game.human_agent as human_agent
 import game.interfaces as interfaces
+import game.alpha_zero.training as alpha_training
 import training.bdt_game
 import training.psq_game
 import tables
@@ -441,7 +442,7 @@ def import_games():
             training.psq_game.convert_psq_files(game_folder, 'data/games.bdt')
 
 
-set_logging(logging.DEBUG)
+# set_logging(logging.DEBUG)
 # human_vs_human()
 # import_games()
 # training.bdt_game.replay_games('data/games.bdt')
@@ -457,9 +458,11 @@ set_logging(logging.DEBUG)
 # train_with_games("../history/value-policy-ai-4", 'data/games.bdt', True, True)
 # train_with_games("value-net-agent", 'data/games.bdt', True, True)
 # train_with_games("/output", 'data/games.bdt', True)
-ai2_vs_human("../history/gcloud-models/value-net-agent", True, False, False)
+# ai2_vs_human("../history/gcloud-models/value-net-agent", True, False, False)
 # ai_vs_human("../history/gomocup-2016-6", True, False, False)
 # ai_vs_ai("../history/ai_vs_ai", True)
 
 # train_evaluator(1000, 100)
 #run_actor_critic_agent(10)
+
+alpha_training.run(100, 10, '../history/alpha_zero/model')
