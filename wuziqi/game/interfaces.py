@@ -56,3 +56,9 @@ class IModel(metaclass=ABCMeta):
     @abstractmethod
     def predict(self, data):
         pass
+
+
+class ISynchronizable(metaclass=ABCMeta):
+    @abstractmethod
+    def synchronize(self, action):
+        pass

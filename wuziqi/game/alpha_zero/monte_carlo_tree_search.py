@@ -7,9 +7,12 @@ import threading
 import concurrent
 import concurrent.futures as futures
 import game.alpha_zero.queued_evaluator as queued_evaluator
+import game.synchronizable_object as synchronizable_object
 
-class McNode:
+
+class McNode(synchronizable_object.SynchronizableObject):
     def __init__(self, state, side):
+        synchronizable_object.SynchronizableObject.__init__(self)
         self.state = state
         self.edges = []
         self.value = 0
@@ -19,8 +22,9 @@ class McNode:
         self.mask = np.reshape(state == 0, self.state.shape[0] * self.state.shape[1])
 
 
-class McEdge:
+class McEdge(synchronizable_object.SynchronizableObject):
     def __init__(self, src_node: McNode, action: wuziqi.WuziqiAction, dst_node: McNode, probability):
+        synchronizable_object.SynchronizableObject.__init__(self)
         self.src_node = src_node
         self.action = action
         self.dst_node = dst_node
@@ -101,26 +105,37 @@ class McTreeSearch:
 
         p = p * (1 - self.options.thether) + p_ * self.options.thether
 
-        node.value = v[0]
-        if not wuziqi.WuziqiGame(self.net.board_size, node.state).is_ended():
-            node.edges = self.build_edges(node, p)
-        node.expended = True
+        def update_node():
+            node.value = v[0]
+            if not wuziqi.WuziqiGame(self.net.board_size, node.state).is_ended():
+                node.edges = self.build_edges(node, p)
+            node.expended = True
+
+        node.synchronize(update_node)
         return node
 
     def update_upper_confidence_bound(self, node: McNode):
+        def update_node():
+            node.visit_count += 1
+
+        node.synchronize(update_node)
         node_visit_count_sqrt = math.sqrt(node.visit_count)
         for edge in node.edges:
-            edge.upper_confidence_bound = self.options.c_put * edge.probability * \
-                                          node_visit_count_sqrt * (1 + edge.visit_count)
+            def update_edge():
+                edge.upper_confidence_bound = self.options.c_put * edge.probability * \
+                                              node_visit_count_sqrt * (1 + edge.visit_count)
+
+            edge.synchronize(update_edge)
+
 
     def back_up(self, steps, val):
 
         for step in reversed(steps):
-            step.src_node.visit_count += 1
+            # step.src_node.visit_count += 1
             step.visit_count += 1
             step.total_action_value += val
             step.action_value = step.total_action_value / step.visit_count
-            # self.update_upper_confidence_bound(step.src_node)
+            self.update_upper_confidence_bound(step.src_node)
 
     def select_edge(self, node: McNode):
 
